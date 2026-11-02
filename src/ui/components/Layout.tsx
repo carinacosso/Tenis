@@ -1,39 +1,56 @@
 import type { ReactNode } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { BackIcon, SettingsIcon, TrophyIcon, UsersIcon } from './Icons';
 import { IconButton } from './ui';
 
 const tabs = [
-  { to: '/', label: 'Torneos', icon: TrophyIcon, end: true },
-  { to: '/jugadores', label: 'Jugadores', icon: UsersIcon, end: false },
-  { to: '/ajustes', label: 'Ajustes', icon: SettingsIcon, end: false },
+  {
+    to: '/',
+    label: 'Torneos',
+    icon: TrophyIcon,
+    isActive: (path: string) => path === '/' || path.startsWith('/torneos'),
+  },
+  {
+    to: '/jugadores',
+    label: 'Jugadores',
+    icon: UsersIcon,
+    isActive: (path: string) => path.startsWith('/jugadores'),
+  },
+  {
+    to: '/ajustes',
+    label: 'Ajustes',
+    icon: SettingsIcon,
+    isActive: (path: string) => path.startsWith('/ajustes'),
+  },
 ];
 
 export function BottomNav() {
+  const { pathname } = useLocation();
   return (
     <nav
       aria-label="Secciones"
       className="fixed inset-x-0 bottom-0 z-40 border-t-2 border-neutral-200 bg-white pb-[env(safe-area-inset-bottom)] dark:border-neutral-800 dark:bg-neutral-950"
     >
       <ul className="mx-auto flex max-w-xl">
-        {tabs.map(({ to, label, icon: TabIcon, end }) => (
-          <li key={to} className="flex-1">
-            <NavLink
-              to={to}
-              end={end}
-              className={({ isActive }) =>
-                `flex min-h-16 flex-col items-center justify-center gap-0.5 text-sm font-semibold ${
-                  isActive
+        {tabs.map(({ to, label, icon: TabIcon, isActive }) => {
+          const active = isActive(pathname);
+          return (
+            <li key={to} className="flex-1">
+              <Link
+                to={to}
+                aria-current={active ? 'page' : undefined}
+                className={`flex min-h-16 flex-col items-center justify-center gap-0.5 text-sm font-semibold ${
+                  active
                     ? 'text-brand-800 dark:text-ball'
                     : 'text-neutral-600 dark:text-neutral-400'
-                }`
-              }
-            >
-              <TabIcon />
-              {label}
-            </NavLink>
-          </li>
-        ))}
+                }`}
+              >
+                <TabIcon />
+                {label}
+              </Link>
+            </li>
+          );
+        })}
       </ul>
     </nav>
   );

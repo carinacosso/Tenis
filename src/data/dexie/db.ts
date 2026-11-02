@@ -1,6 +1,9 @@
 import Dexie, { type EntityTable } from 'dexie';
+import type { Match } from '../../domain/knockout';
 import type { Player } from '../../domain/player';
+import type { Entry } from '../../domain/registration';
 import type { AppSettings } from '../../domain/settings';
+import type { Tournament } from '../../domain/tournament';
 
 export const SETTINGS_KEY = 'app';
 
@@ -17,12 +20,20 @@ export interface SettingsRow {
 export class TenisDatabase extends Dexie {
   players!: EntityTable<Player, 'id'>;
   settings!: EntityTable<SettingsRow, 'key'>;
+  tournaments!: EntityTable<Tournament, 'id'>;
+  entries!: EntityTable<Entry, 'id'>;
+  matches!: EntityTable<Match, 'id'>;
 
   constructor(name = 'tenis-torneos') {
     super(name);
     this.version(1).stores({
       players: 'id, lastName, deletedAt',
       settings: 'key',
+    });
+    this.version(2).stores({
+      tournaments: 'id, status, date',
+      entries: 'id, tournamentId',
+      matches: 'id, tournamentId',
     });
   }
 }

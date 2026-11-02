@@ -1,20 +1,5 @@
-import { type Page, expect, test } from '@playwright/test';
-
-async function createPlayer(
-  page: Page,
-  data: { firstName: string; lastName: string; phone: string; level: string; sex?: string },
-) {
-  await page.goto('/jugadores/nuevo');
-  await page.getByLabel('Nombre', { exact: true }).fill(data.firstName);
-  await page.getByLabel('Apellido').fill(data.lastName);
-  await page.getByLabel('Teléfono').fill(data.phone);
-  await page.getByRole('button', { name: data.level, exact: true }).click();
-  if (data.sex) await page.getByRole('button', { name: data.sex, exact: true }).click();
-  await page.getByRole('button', { name: 'Guardar jugador' }).click();
-  await expect(
-    page.getByRole('heading', { level: 1, name: `${data.firstName} ${data.lastName}` }),
-  ).toBeVisible();
-}
+import { expect, test } from '@playwright/test';
+import { createPlayer } from './helpers';
 
 test.describe('Jugadores', () => {
   test('alta, búsqueda, edición y baja de un jugador', async ({ page }) => {

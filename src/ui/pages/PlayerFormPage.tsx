@@ -1,5 +1,5 @@
 import { type FormEvent, useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import {
   EMPTY_PLAYER_DRAFT,
   type Player,
@@ -33,6 +33,10 @@ export function PlayerFormPage() {
   const { players } = useServices();
   const settings = useSettings();
   const navigate = useNavigate();
+  const [params] = useSearchParams();
+  // Destino al guardar (por ejemplo, volver a la inscripción de un torneo). Solo rutas internas.
+  const returnTo = params.get('volver');
+  const safeReturn = returnTo?.startsWith('/') && !returnTo.startsWith('//') ? returnTo : null;
 
   const [draft, setDraft] = useState<PlayerDraft>(EMPTY_PLAYER_DRAFT);
   const [loaded, setLoaded] = useState(!editing);
@@ -72,7 +76,7 @@ export function PlayerFormPage() {
       setErrors(result.errors);
       return;
     }
-    navigate(`/jugadores/${result.value.id}`, { replace: true });
+    navigate(safeReturn ?? `/jugadores/${result.value.id}`, { replace: true });
   };
 
   const onSubmit = async (e: FormEvent) => {
@@ -82,7 +86,7 @@ export function PlayerFormPage() {
     else await save();
   };
 
-  const back = editing ? `/jugadores/${id}` : '/jugadores';
+  const back = editing ? `/jugadores/${id}` : (safeReturn ?? '/jugadores');
   const title = editing ? 'Editar jugador' : 'Nuevo jugador';
 
   if (notFound) {

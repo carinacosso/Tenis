@@ -7,6 +7,11 @@ import { PlayerDetailPage } from './pages/PlayerDetailPage';
 import { PlayerFormPage } from './pages/PlayerFormPage';
 import { PlayersPage } from './pages/PlayersPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { MatchResultPage } from './pages/MatchResultPage';
+import { RegisterPage } from './pages/RegisterPage';
+import { SeedsPage } from './pages/SeedsPage';
+import { TournamentFormPage } from './pages/TournamentFormPage';
+import { TournamentPage } from './pages/TournamentPage';
 import { TournamentsPage } from './pages/TournamentsPage';
 
 export function App() {
@@ -17,6 +22,12 @@ export function App() {
     <>
       <Routes>
         <Route path="/" element={<TournamentsPage />} />
+        <Route path="/torneos/nuevo" element={<TournamentFormPage />} />
+        <Route path="/torneos/:id" element={<TournamentPage />} />
+        <Route path="/torneos/:id/editar" element={<TournamentFormPage />} />
+        <Route path="/torneos/:id/inscribir" element={<RegisterPage />} />
+        <Route path="/torneos/:id/cabezas" element={<SeedsPage />} />
+        <Route path="/torneos/:id/partidos/:matchId" element={<MatchResultPage />} />
         <Route path="/jugadores" element={<PlayersPage />} />
         <Route path="/jugadores/nuevo" element={<PlayerFormPage />} />
         <Route path="/jugadores/:id" element={<PlayerDetailPage />} />

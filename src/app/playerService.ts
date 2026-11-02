@@ -19,6 +19,11 @@ export class PlayerService {
     return this.repos.players.observeActive(listener, onError);
   }
 
+  /** Incluye jugadores borrados, para mostrar nombres en torneos donde participaron. */
+  observeAll(listener: Listener<Player[]>, onError?: ErrorListener): Unsubscribe {
+    return this.repos.players.observeAll(listener, onError);
+  }
+
   get(id: Id): Promise<Player | undefined> {
     return this.repos.players.getById(id);
   }

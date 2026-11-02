@@ -54,9 +54,11 @@ Decisiones clave:
 
 ## Modelo de datos
 
-Implementado (fase 1): `Player`, `AppSettings`.
+Implementado: `Player`, `AppSettings` (fase 1); `Tournament`, `Entry`, `Match` con `SideSource`, `MatchResult` por sets y `ScoringConfig` (fase 2). Dexie: versión 2 agrega `tournaments`, `entries`, `matches`.
 
-Planificado (se implementa en las fases siguientes):
+Archivos de dominio: `player.ts`, `settings.ts`, `tournament.ts`, `registration.ts` (inscripción, lista de espera, pagos, cabezas), `knockout.ts` (sorteo, resolución, cascada, podio), `scoring.ts` (configuración y validación de resultados), `random.ts` (rng con semilla).
+
+Planificado / pendiente de completar en fases siguientes:
 
 - **Tournament** (= una categoría; decisión del usuario: _una categoría por torneo_):
   `name, date, venue?, category, modality: singles|doubles, format: FormatConfig, scoring: ScoringConfig, tiebreakOrder[], maxEntries, entryFee (por jugador), courts[], status: draft|registration|in_progress|finished`.

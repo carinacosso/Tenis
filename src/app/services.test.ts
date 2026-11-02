@@ -24,7 +24,7 @@ describe('servicios', () => {
     repos = createMemoryRepositories();
     clock = new Date('2026-05-01T10:00:00.000Z');
     ids = 0;
-    const deps: AppDeps = { now: () => clock, newId: () => `id-${++ids}` };
+    const deps: AppDeps = { now: () => clock, newId: () => `id-${++ids}`, random: () => 0.5 };
     services = createServices(repos, deps);
   });
 
