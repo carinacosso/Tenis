@@ -132,7 +132,7 @@ export function PlayerFormPage() {
           onChange={(e) => update('lastName', e.target.value)}
         />
         <TextField
-          label="Teléfono"
+          label="Teléfono (opcional)"
           type="tel"
           inputMode="tel"
           autoComplete="tel"
@@ -169,7 +169,7 @@ export function PlayerFormPage() {
         open={duplicates.length > 0}
         title="¿Jugador repetido?"
         message={`Ya existe un jugador parecido: ${duplicates
-          .map((p) => `${fullName(p)} (${p.phone})`)
+          .map((p) => (p.phone ? `${fullName(p)} (${p.phone})` : fullName(p)))
           .join(', ')}. ¿Querés guardarlo igual?`}
         confirmLabel="Guardar igual"
         onConfirm={() => {

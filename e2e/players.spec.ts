@@ -65,13 +65,25 @@ test.describe('Jugadores', () => {
     await page.getByRole('button', { name: 'Guardar jugador' }).click();
     await expect(page.getByText('Ingresá el nombre.')).toBeVisible();
     await expect(page.getByText('Ingresá el apellido.')).toBeVisible();
-    await expect(page.getByText('Ingresá el teléfono.')).toBeVisible();
+    await expect(page.getByText('Ingresá el teléfono.')).toHaveCount(0);
     await expect(page.getByText('Elegí un nivel.')).toBeVisible();
 
     await page.getByLabel('Teléfono').fill('abc');
     await page.getByRole('button', { name: 'Guardar jugador' }).click();
     await expect(page.getByText('El teléfono no es válido.')).toBeVisible();
     await expect(page).toHaveURL(/\/jugadores\/nuevo$/);
+  });
+
+  test('se puede cargar un jugador sin teléfono', async ({ page }) => {
+    await page.goto('/jugadores/nuevo');
+    await page.getByLabel('Nombre', { exact: true }).fill('Sofía');
+    await page.getByLabel('Apellido').fill('Ruiz');
+    await page.getByRole('button', { name: '2da', exact: true }).click();
+    await page.getByRole('button', { name: 'Guardar jugador' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Sofía Ruiz' })).toBeVisible();
+    await expect(page.getByText('Sin teléfono')).toBeVisible();
+    await expect(page.getByRole('link', { name: /Llamar/ })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: 'WhatsApp' })).toHaveCount(0);
   });
 
   test('avisa si el jugador parece repetido', async ({ page }) => {

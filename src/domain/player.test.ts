@@ -45,11 +45,16 @@ describe('validatePlayerDraft', () => {
     expect(result.ok).toBe(true);
   });
 
-  it('marca como obligatorios nombre, apellido, teléfono y nivel', () => {
+  it('marca como obligatorios nombre, apellido y nivel', () => {
     const result = validatePlayerDraft(EMPTY_PLAYER_DRAFT, DEFAULT_LEVELS);
     expect(result.ok).toBe(false);
     if (result.ok) return;
-    expect(Object.keys(result.errors).sort()).toEqual(['firstName', 'lastName', 'level', 'phone']);
+    expect(Object.keys(result.errors).sort()).toEqual(['firstName', 'lastName', 'level']);
+  });
+
+  it('acepta jugador sin teléfono', () => {
+    const result = validatePlayerDraft({ ...validDraft, phone: '   ' }, DEFAULT_LEVELS);
+    expect(result.ok && result.value.phone).toBe('');
   });
 
   it('rechaza un nivel que no está en la lista', () => {
@@ -153,6 +158,14 @@ describe('búsqueda', () => {
     const a = makePlayer({ firstName: 'Bruno', lastName: 'Díaz' });
     const b = makePlayer({ firstName: 'Ana', lastName: 'diaz' });
     expect(comparePlayers(a, b)).toBeGreaterThan(0);
+  });
+});
+
+describe('findPossibleDuplicates sin teléfono', () => {
+  it('dos jugadores sin teléfono no se consideran duplicados por eso', () => {
+    const players = [makePlayer({ id: '1', firstName: 'Ana', lastName: 'Gómez', phone: '' })];
+    const draft = { ...EMPTY_PLAYER_DRAFT, firstName: 'Luis', lastName: 'Pérez', phone: '' };
+    expect(findPossibleDuplicates(players, draft)).toEqual([]);
   });
 });
 

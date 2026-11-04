@@ -53,7 +53,7 @@ export function isValidPhone(phone: string): boolean {
 
 /**
  * Valida y normaliza los datos de un jugador.
- * Obligatorios: nombre, apellido, teléfono y nivel. Sexo y notas son opcionales.
+ * Obligatorios: nombre, apellido y nivel. Teléfono, sexo y notas son opcionales.
  * `levels` es la lista de niveles válidos configurada en Ajustes.
  */
 export function validatePlayerDraft(
@@ -71,8 +71,8 @@ export function validatePlayerDraft(
   if (!lastName) errors.lastName = 'Ingresá el apellido.';
   else if (lastName.length > MAX_NAME_LENGTH) errors.lastName = 'El apellido es demasiado largo.';
 
-  if (!draft.phone.trim()) errors.phone = 'Ingresá el teléfono.';
-  else if (!isValidPhone(draft.phone)) errors.phone = 'El teléfono no es válido.';
+  // El teléfono es opcional, pero si se carga tiene que ser válido.
+  if (draft.phone.trim() && !isValidPhone(draft.phone)) errors.phone = 'El teléfono no es válido.';
 
   if (!draft.level) errors.level = 'Elegí un nivel.';
   else if (!levels.includes(draft.level)) errors.level = 'El nivel no está en la lista.';

@@ -55,7 +55,7 @@ export function PlayerDetailPage() {
           <dt className="font-semibold">Nivel</dt>
           <dd>{player.level}</dd>
           <dt className="font-semibold">Teléfono</dt>
-          <dd>{player.phone}</dd>
+          <dd>{player.phone || 'Sin teléfono'}</dd>
           <dt className="font-semibold">Sexo</dt>
           <dd>{player.sex === 'M' ? 'Hombre' : player.sex === 'F' ? 'Mujer' : 'Sin indicar'}</dd>
           {player.notes && (
@@ -67,22 +67,24 @@ export function PlayerDetailPage() {
         </dl>
       </Card>
 
-      <div className="grid grid-cols-2 gap-3">
-        <a
-          href={`tel:${player.phone}`}
-          className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-neutral-900 text-lg font-semibold dark:border-neutral-100"
-        >
-          <PhoneIcon /> Llamar
-        </a>
-        <a
-          href={whatsapp}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex min-h-14 items-center justify-center rounded-2xl border-2 border-neutral-900 text-lg font-semibold dark:border-neutral-100"
-        >
-          WhatsApp
-        </a>
-      </div>
+      {player.phone && (
+        <div className="grid grid-cols-2 gap-3">
+          <a
+            href={`tel:${player.phone}`}
+            className="inline-flex min-h-14 items-center justify-center gap-2 rounded-2xl border-2 border-neutral-900 text-lg font-semibold dark:border-neutral-100"
+          >
+            <PhoneIcon /> Llamar
+          </a>
+          <a
+            href={whatsapp}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex min-h-14 items-center justify-center rounded-2xl border-2 border-neutral-900 text-lg font-semibold dark:border-neutral-100"
+          >
+            WhatsApp
+          </a>
+        </div>
+      )}
 
       <Link
         to={`/jugadores/${player.id}/editar`}
