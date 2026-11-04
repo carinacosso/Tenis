@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import type { ErrorListener, Listener } from '../../data/ports';
 import type { Id } from '../../domain/common';
-import type { Match } from '../../domain/knockout';
+import type { Match, Round } from '../../domain/match';
 import type { Player } from '../../domain/player';
 import type { Entry } from '../../domain/registration';
 import type { Tournament } from '../../domain/tournament';
@@ -35,6 +35,7 @@ export interface TournamentData {
   tournament: Tournament;
   entries: Entry[];
   matches: Match[];
+  rounds: Round[];
   players: PlayersById;
   entriesById: ReadonlyMap<Id, Entry>;
 }
@@ -69,15 +70,23 @@ export function useTournament(id: Id): TournamentState {
       [tournaments, id],
     ),
   );
+  const rounds = useObservable(
+    useCallback(
+      (listener: Listener<Round[]>, onError: ErrorListener) =>
+        tournaments.observeRounds(id, listener, onError),
+      [tournaments, id],
+    ),
+  );
   const players = useAllPlayers();
 
   return useMemo((): TournamentState => {
-    const parts = [tournament, entries, matches, players];
+    const parts = [tournament, entries, matches, rounds, players];
     if (parts.some((p) => p.status === 'error')) return { status: 'error' };
     if (
       tournament.status !== 'ready' ||
       entries.status !== 'ready' ||
       matches.status !== 'ready' ||
+      rounds.status !== 'ready' ||
       players.status !== 'ready'
     ) {
       return { status: 'loading' };
@@ -89,8 +98,9 @@ export function useTournament(id: Id): TournamentState {
       tournament: tournament.data,
       entries: activeEntries,
       matches: matches.data,
+      rounds: [...rounds.data].sort((a, b) => a.number - b.number),
       players: indexPlayers(players.data),
       entriesById: new Map(activeEntries.map((e) => [e.id, e])),
     };
-  }, [tournament, entries, matches, players]);
+  }, [tournament, entries, matches, rounds, players]);
 }

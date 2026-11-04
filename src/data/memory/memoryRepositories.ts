@@ -1,5 +1,5 @@
 import type { Id } from '../../domain/common';
-import type { Match } from '../../domain/knockout';
+import type { Match, Round } from '../../domain/match';
 import type { Player } from '../../domain/player';
 import type { Entry } from '../../domain/registration';
 import { type AppSettings, DEFAULT_SETTINGS } from '../../domain/settings';
@@ -10,6 +10,7 @@ import type {
   MatchRepository,
   PlayerRepository,
   Repositories,
+  RoundRepository,
   SettingsRepository,
   TournamentRepository,
   Unsubscribe,
@@ -77,6 +78,7 @@ export function createMemoryRepositories(): Repositories {
   const tournamentTable = new MemoryTable<Tournament>(feed);
   const entryTable = new MemoryTable<Entry>(feed);
   const matchTable = new MemoryTable<Match>(feed);
+  const roundTable = new MemoryTable<Round>(feed);
   let settingsValue: AppSettings = clone(DEFAULT_SETTINGS);
 
   const players: PlayerRepository = {
@@ -113,8 +115,19 @@ export function createMemoryRepositories(): Repositories {
     listAll: () => matchTable.where(all),
     saveMany: (rows) => matchTable.put(rows),
     deleteByTournament: (tid) => matchTable.delete(byTournament(tid)),
+    deleteMany: (ids) => matchTable.delete((row) => ids.includes(row.id)),
     observeByTournament: (tid, listener) =>
       feed.watch(() => matchTable.where(byTournament(tid)), listener),
+  };
+
+  const rounds: RoundRepository = {
+    listByTournament: (tid) => roundTable.where(byTournament(tid)),
+    listAll: () => roundTable.where(all),
+    saveMany: (rows) => roundTable.put(rows),
+    deleteByTournament: (tid) => roundTable.delete(byTournament(tid)),
+    deleteMany: (ids) => roundTable.delete((row) => ids.includes(row.id)),
+    observeByTournament: (tid, listener) =>
+      feed.watch(() => roundTable.where(byTournament(tid)), listener),
   };
 
   const settings: SettingsRepository = {
@@ -131,6 +144,7 @@ export function createMemoryRepositories(): Repositories {
     tournaments,
     entries,
     matches,
+    rounds,
     settings,
     transaction: (work) => work(),
     clearAll: async () => {
@@ -139,6 +153,7 @@ export function createMemoryRepositories(): Repositories {
         tournamentTable.delete(all),
         entryTable.delete(all),
         matchTable.delete(all),
+        roundTable.delete(all),
       ]);
       await settings.save(clone(DEFAULT_SETTINGS));
     },

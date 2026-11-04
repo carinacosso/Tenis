@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SETS_SCORING,
+  buildScoreResult,
+  checkTimeResult,
+  pointsOf,
   type SetsScoring,
   checkPointsResult,
   checkResult,
@@ -264,5 +267,47 @@ describe('formato y configuración', () => {
     expect(describeScoring({ ...fourGames, goldenPoint: true })).toBe(
       '1 set a 4 · tie-break a 7 · punto de oro',
     );
+  });
+});
+
+describe('por tiempo y armado de resultados', () => {
+  it('por tiempo se permite el empate', () => {
+    expect(checkTimeResult(7, 7)).toEqual({ ok: true, winner: null });
+    expect(checkTimeResult(3, 9)).toEqual({ ok: true, winner: 'B' });
+    expect(checkTimeResult(-1, 2).ok).toBe(false);
+    expect(
+      checkResult(
+        { kind: 'time', minutes: 15 },
+        { kind: 'time', outcome: 'normal', a: 5, b: 5, winner: null },
+      ),
+    ).toEqual({ ok: true, winner: null });
+  });
+
+  it('buildScoreResult arma resultados válidos', () => {
+    expect(buildScoreResult({ kind: 'points', target: 21 }, 21, 17)).toEqual({
+      ok: true,
+      result: { kind: 'points', outcome: 'normal', a: 21, b: 17, winner: 'A' },
+    });
+    expect(buildScoreResult({ kind: 'points', target: 21 }, 20, 17).ok).toBe(false);
+    expect(buildScoreResult({ kind: 'time', minutes: 12 }, 4, 4)).toMatchObject({
+      ok: true,
+      result: { kind: 'time', winner: null },
+    });
+    expect(buildScoreResult(DEFAULT_SETS_SCORING, 6, 2).ok).toBe(false);
+  });
+
+  it('pointsOf y formato', () => {
+    const r = {
+      kind: 'points' as const,
+      outcome: 'normal' as const,
+      a: 15,
+      b: 21,
+      winner: 'B' as const,
+    };
+    expect(pointsOf(r)).toEqual({ a: 15, b: 21 });
+    expect(formatResult(r)).toBe('15-21');
+    expect(formatResultForWinner(r)).toBe('21-15');
+    expect(describeScoring({ kind: 'points', target: 24 })).toBe('Partidos a 24 puntos');
+    expect(describeScoring({ kind: 'time', minutes: 12 })).toBe('Por tiempo: 12 minutos');
   });
 });

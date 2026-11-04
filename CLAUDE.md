@@ -7,8 +7,8 @@
 | Fase                                                                           | Estado    |
 | ------------------------------------------------------------------------------ | --------- |
 | 1. Base (arquitectura, repositorios, ABM jugadores, verify, hooks, CI, deploy) | ✅ Hecha  |
-| 2. Primer torneo (inscripción, eliminación directa, puntuación, resultados)    | Pendiente |
-| 3. Rotativos (Americano dobles/singles/mixto, Mexicano)                        | Pendiente |
+| 2. Primer torneo (inscripción, eliminación directa, puntuación, resultados)    | ✅ Hecha  |
+| 3. Rotativos (Americano dobles/singles/mixto, Mexicano)                        | ✅ Hecha  |
 | 4. Grupos + playoffs, liga, desempates                                         | Pendiente |
 | 5. Canchas/horarios, W.O./abandonos, consolación                               | Pendiente |
 | 6. Compartir imagen, PDF, Excel, backup, historial, estadísticas               | Pendiente |
@@ -56,7 +56,11 @@ Decisiones clave:
 
 Implementado: `Player`, `AppSettings` (fase 1); `Tournament`, `Entry`, `Match` con `SideSource`, `MatchResult` por sets y `ScoringConfig` (fase 2). Dexie: versión 2 agrega `tournaments`, `entries`, `matches`.
 
-Archivos de dominio: `player.ts`, `settings.ts`, `tournament.ts`, `registration.ts` (inscripción, lista de espera, pagos, cabezas), `knockout.ts` (sorteo, resolución, cascada, podio), `scoring.ts` (configuración y validación de resultados), `random.ts` (rng con semilla).
+Fase 3: `FormatConfig` suma `americano` (variantes doubles/singles/mixed) y `mexicano`, con `rounds` (null = rotación completa); `Tournament.plannedRounds` se fija al generar; `Round` guarda quiénes descansan (Dexie versión 3, tabla `rounds`); `SideSource` suma `entries`; resultados `points` y `time` (por tiempo puede haber empate).
+
+Archivos de dominio: `player.ts`, `settings.ts`, `tournament.ts`, `registration.ts` (inscripción, lista de espera, pagos, cabezas), `match.ts` (Match, Round, SideSource), `knockout.ts` (sorteo, resolución, cascada, podio), `rotation.ts` (Americano y Mexicano), `rotationStandings.ts` (ranking y avance de rondas), `scoring.ts` (configuración y validación de resultados), `random.ts` (rng con semilla).
+
+Algoritmo de rotación (`rotation.ts`): descansa primero quien menos descansó; en dobles con N múltiplo de 4 se alterna el método del círculo (compañeros sin repetir garantizado) con búsqueda local, y en el resto se usa búsqueda local con costo = 10·(compañeros repetidos)² + (rivales repetidos)². Se generan varias planificaciones completas y se elige la de menor costo. Singles usa el círculo (cada rival una vez). Mixto: parejas hombre+mujer, rotación de compañeras como punto de partida.
 
 Planificado / pendiente de completar en fases siguientes:
 
@@ -72,18 +76,39 @@ Planificado / pendiente de completar en fases siguientes:
 
 ## Reglas de negocio decididas
 
-| Tema                                                | Decisión                                                                                                                                                            |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Torneo vs categoría                                 | Una categoría por torneo.                                                                                                                                           |
-| Corregir un resultado que ya hizo avanzar el cuadro | Avisar qué partidos posteriores se ven afectados y pedir confirmación antes de borrarlos. En Mexicano se recalcula el ranking pero no se rearman rondas ya jugadas. |
-| W.O. en tablas                                      | Cuenta como 6-0 6-0 (sets y games del formato) para el ganador.                                                                                                     |
-| Americano/Mexicano "a 21"                           | Gana el primero que llega a 21 (no es un total repartido).                                                                                                          |
-| Nivel del jugador                                   | Lista configurable en Ajustes (por defecto 1ra…7ma, Principiante). No se puede quitar un nivel asignado a jugadores activos.                                        |
-| Lista de espera                                     | Promoción automática mientras no se hayan generado los cruces. Después, los reemplazos son manuales.                                                                |
-| Monto de inscripción                                | Individual (por jugador). En dobles, cada jugador tiene su propio estado de pago.                                                                                   |
-| Datos obligatorios del jugador                      | Nombre, apellido, teléfono y nivel. Sexo y notas, opcionales (sexo será obligatorio para Americano mixto).                                                          |
-| Jugador repetido                                    | Se avisa si coincide nombre+apellido (sin tildes) o teléfono; se puede guardar igual.                                                                               |
-| Borrar jugador                                      | Borrado lógico (se conserva para historial).                                                                                                                        |
+| Tema                                                | Decisión                                                                                                                                                                                               |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Torneo vs categoría                                 | Una categoría por torneo.                                                                                                                                                                              |
+| Corregir un resultado que ya hizo avanzar el cuadro | Avisar qué partidos posteriores se ven afectados y pedir confirmación antes de borrarlos. En Mexicano se recalcula el ranking pero no se rearman rondas ya jugadas.                                    |
+| W.O. en tablas                                      | Cuenta como 6-0 6-0 (sets y games del formato) para el ganador.                                                                                                                                        |
+| Americano/Mexicano "a 21"                           | Gana el primero que llega a 21 (no es un total repartido).                                                                                                                                             |
+| Nivel del jugador                                   | Lista configurable en Ajustes (por defecto 1ra…7ma, Principiante). No se puede quitar un nivel asignado a jugadores activos.                                                                           |
+| Lista de espera                                     | Promoción automática mientras no se hayan generado los cruces. Después, los reemplazos son manuales.                                                                                                   |
+| Monto de inscripción                                | Individual (por jugador). En dobles, cada jugador tiene su propio estado de pago.                                                                                                                      |
+| Datos obligatorios del jugador                      | Nombre, apellido, teléfono y nivel. Sexo y notas, opcionales (sexo será obligatorio para Americano mixto).                                                                                             |
+| Jugador repetido                                    | Se avisa si coincide nombre+apellido (sin tildes) o teléfono; se puede guardar igual.                                                                                                                  |
+| Borrar jugador                                      | Borrado lógico (se conserva para historial).                                                                                                                                                           |
+| Categoría del torneo                                | Texto libre, con accesos rápidos a la lista de niveles.                                                                                                                                                |
+| Cabezas de serie                                    | Opcionales, hasta la mitad del cuadro. Ubicación ITF/ATP: 1 arriba, 2 abajo, 3-4 (arriba del 2.º cuarto / abajo del 3.º), 5-8, 9-16… se sortean dentro de su grupo.                                    |
+| Byes                                                | Primero enfrente de los cabezas en orden; el resto según el orden estándar de posiciones (nunca bye contra bye).                                                                                       |
+| Tercer puesto                                       | No se juega: los dos perdedores de semifinal comparten el tercer lugar en el podio.                                                                                                                    |
+| Tie-break                                           | Se juega con iguales en `gamesPerSet` (6-6 o 4-4). El marcador del tie-break es opcional y se carga solo el puntaje del que perdió. Sin tie-break: ventaja hasta 2 games.                              |
+| Super tie-break                                     | Reemplaza al set decisivo; a 10 por 2.                                                                                                                                                                 |
+| Bajas después del sorteo                            | No se permiten (llegan W.O./abandono en la fase 5). Se puede "Deshacer sorteo" solo si no hay resultados cargados.                                                                                     |
+| Cambios después del sorteo                          | Nombre, fecha, lugar, categoría, cupo y monto se pueden editar; modalidad, formato y puntuación no.                                                                                                    |
+| Corrección de resultados                            | Si cambia el ganador y hay partidos posteriores con resultado, se listan y se pide confirmación antes de borrarlos. Si solo cambia el marcador, se guarda directo.                                     |
+| Descansos en rotativos                              | El que descansa suma el promedio de puntos por jugador de esa ronda (se acredita cuando la ronda está completa). No cuenta como partido jugado ni ganado. Descansa primero quien menos descansó.       |
+| Rondas del Americano                                | Configurables al crear el torneo; por defecto, rotación completa (todos juegan con todos una vez).                                                                                                     |
+| Ranking de rotativos                                | Puntos totales → partidos ganados → diferencia de puntos → sorteo (estable por torneo).                                                                                                                |
+| Mexicano, ronda 1                                   | Por nivel del jugador (orden de la lista de niveles), al azar dentro del mismo nivel. Desde la ronda 2, por ranking: 1° y 4° vs 2° y 3°. Cada ronda se genera con un botón cuando termina la anterior. |
+
+Otras decisiones de la fase 3:
+
+- En los rotativos la inscripción es individual; la modalidad la fija el formato (Americano singles → singles, el resto → dobles).
+- Rotativos: partidos a puntos (16, 21, 24, 32 u otro) o por tiempo. Por tiempo se cargan los puntos de cada lado y se permite el empate (cuenta como partido jugado, no ganado).
+- Americano: se generan todas las rondas al sortear. Mexicano: la ronda 1 al sortear, el resto con el botón "Generar ronda N" cuando la anterior está completa; la última ronda se puede "Rearmar" mientras no tenga resultados.
+- Americano mixto: todos los inscriptos necesitan sexo cargado; mínimo 2 hombres y 2 mujeres. Si sobran de un sexo, descansan por turnos.
+- Podio de rotativos: los 3 primeros del ranking.
 
 ## Convenciones
 

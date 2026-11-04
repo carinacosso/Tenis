@@ -30,6 +30,10 @@ export type ScoringConfig = SetsScoring | PointsScoring | TimeScoring;
 
 export const SUPER_TIEBREAK_POINTS = 10;
 
+export const POINT_TARGETS = [16, 21, 24, 32] as const;
+
+export const DEFAULT_POINTS_SCORING: PointsScoring = { kind: 'points', target: 21 };
+
 export const DEFAULT_SETS_SCORING: SetsScoring = {
   kind: 'sets',
   gamesPerSet: 6,
@@ -62,7 +66,18 @@ export interface PointsResult {
   winner: Side;
 }
 
-export type MatchResult = SetsResult | PointsResult;
+/** Partido por tiempo: puede terminar empatado (winner = null). */
+export interface TimeResult {
+  kind: 'time';
+  outcome: 'normal';
+  a: number;
+  b: number;
+  winner: Side | null;
+}
+
+export type MatchResult = SetsResult | PointsResult | TimeResult;
+
+export type ResultWinner = Side | null;
 
 export type ResultCheck = { ok: true; winner: Side } | { ok: false; error: string };
 
@@ -158,18 +173,53 @@ export function checkPointsResult(config: PointsScoring, a: number, b: number): 
   return { ok: true, winner: a > b ? 'A' : 'B' };
 }
 
+/** Valida un partido por tiempo: puntos enteros, se permite el empate. */
+export function checkTimeResult(a: number, b: number): TimeCheck {
+  if (!isCount(a) || !isCount(b))
+    return { ok: false, error: 'Los puntos deben ser números enteros.' };
+  return { ok: true, winner: a === b ? null : a > b ? 'A' : 'B' };
+}
+
+export type TimeCheck = { ok: true; winner: Side | null } | { ok: false; error: string };
+
 /** Valida un resultado contra la configuración del torneo. */
-export function checkResult(config: ScoringConfig, result: MatchResult): ResultCheck {
-  let check: ResultCheck;
+export function checkResult(config: ScoringConfig, result: MatchResult): TimeCheck {
+  let check: TimeCheck;
   if (config.kind === 'sets' && result.kind === 'sets')
     check = checkSetsResult(config, result.sets);
   else if (config.kind === 'points' && result.kind === 'points')
     check = checkPointsResult(config, result.a, result.b);
+  else if (config.kind === 'time' && result.kind === 'time')
+    check = checkTimeResult(result.a, result.b);
   else return { ok: false, error: 'El tipo de resultado no corresponde al torneo.' };
   if (check.ok && check.winner !== result.winner) {
     return { ok: false, error: 'El ganador no coincide con el resultado.' };
   }
   return check;
+}
+
+/** Arma un resultado a puntos o por tiempo, validado. */
+export function buildScoreResult(
+  config: ScoringConfig,
+  a: number,
+  b: number,
+): { ok: true; result: PointsResult | TimeResult } | { ok: false; error: string } {
+  if (config.kind === 'points') {
+    const check = checkPointsResult(config, a, b);
+    if (!check.ok) return check;
+    return { ok: true, result: { kind: 'points', outcome: 'normal', a, b, winner: check.winner } };
+  }
+  if (config.kind === 'time') {
+    const check = checkTimeResult(a, b);
+    if (!check.ok) return check;
+    return { ok: true, result: { kind: 'time', outcome: 'normal', a, b, winner: check.winner } };
+  }
+  return { ok: false, error: 'Este torneo se juega por sets.' };
+}
+
+/** Puntos de cada lado en formatos a puntos o por tiempo (null si es por sets). */
+export function pointsOf(result: MatchResult): { a: number; b: number } | null {
+  return result.kind === 'sets' ? null : { a: result.a, b: result.b };
 }
 
 /** Crea un resultado por sets válido, calculando el ganador. */
@@ -217,7 +267,7 @@ export function quickSetScores(config: SetsScoring, index: number): QuickSetScor
 
 /** Formatea el resultado desde el lado A: "6-3 7-6(5)". */
 export function formatResult(result: MatchResult): string {
-  if (result.kind === 'points') return `${result.a}-${result.b}`;
+  if (result.kind !== 'sets') return `${result.a}-${result.b}`;
   return result.sets
     .map((s) => {
       const tb = s.tiebreak ? `(${Math.min(s.tiebreak.a, s.tiebreak.b)})` : '';
@@ -228,8 +278,8 @@ export function formatResult(result: MatchResult): string {
 
 /** Formatea el resultado desde el punto de vista del ganador: "6-3 6-7(5) 10-8". */
 export function formatResultForWinner(result: MatchResult): string {
-  if (result.winner === 'A') return formatResult(result);
-  if (result.kind === 'points') return `${result.b}-${result.a}`;
+  if (result.winner !== 'B') return formatResult(result);
+  if (result.kind !== 'sets') return `${result.b}-${result.a}`;
   return formatResult({
     ...result,
     sets: result.sets.map((s) => ({
@@ -270,7 +320,7 @@ export function checkScoringConfig(config: ScoringConfig): string | null {
 
 /** Describe la configuración en una línea: "2 de 3 sets a 6 · tie-break a 7 · super tie-break". */
 export function describeScoring(config: ScoringConfig): string {
-  if (config.kind === 'points') return `A ${config.target} puntos`;
+  if (config.kind === 'points') return `Partidos a ${config.target} puntos`;
   if (config.kind === 'time') return `Por tiempo: ${config.minutes} minutos`;
   const sets =
     config.bestOf === 1

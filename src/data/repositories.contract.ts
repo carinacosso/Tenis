@@ -126,6 +126,45 @@ export function runRepositoryContract(name: string, create: () => Promise<Reposi
       expect(counts.at(-1)).toBe(1);
     });
 
+    it('rondas: guarda, filtra, borra puntuales y por torneo', async () => {
+      const round = (id: string, tournamentId: string) => ({
+        id,
+        tournamentId,
+        number: 1,
+        restingEntryIds: ['e1'],
+        ownerId: 'local',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        deletedAt: null,
+      });
+      await repos.rounds.saveMany([round('r1', 't1'), round('r2', 't1'), round('r3', 't2')]);
+      expect((await repos.rounds.listByTournament('t1')).map((r) => r.id).sort()).toEqual([
+        'r1',
+        'r2',
+      ]);
+      await repos.rounds.deleteMany(['r2']);
+      expect((await repos.rounds.listByTournament('t1')).map((r) => r.id)).toEqual(['r1']);
+      await repos.rounds.deleteByTournament('t1');
+      expect((await repos.rounds.listAll()).map((r) => r.id)).toEqual(['r3']);
+    });
+
+    it('partidos: borra puntuales', async () => {
+      const plan = {
+        round: 1,
+        position: 0,
+        sideA: { kind: 'bye' as const },
+        sideB: { kind: 'bye' as const },
+      };
+      await repos.matches.saveMany(
+        toMatches([
+          { id: 'm1', ...plan },
+          { id: 'm2', ...plan },
+        ]),
+      );
+      await repos.matches.deleteMany(['m1']);
+      expect((await repos.matches.listAll()).map((m) => m.id)).toEqual(['m2']);
+    });
+
     it('settings devuelve los valores por defecto si no hay nada guardado', async () => {
       expect(await repos.settings.get()).toEqual(DEFAULT_SETTINGS);
     });

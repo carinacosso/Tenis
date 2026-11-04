@@ -1,5 +1,5 @@
 import Dexie, { type EntityTable } from 'dexie';
-import type { Match } from '../../domain/knockout';
+import type { Match, Round } from '../../domain/match';
 import type { Player } from '../../domain/player';
 import type { Entry } from '../../domain/registration';
 import type { AppSettings } from '../../domain/settings';
@@ -23,6 +23,7 @@ export class TenisDatabase extends Dexie {
   tournaments!: EntityTable<Tournament, 'id'>;
   entries!: EntityTable<Entry, 'id'>;
   matches!: EntityTable<Match, 'id'>;
+  rounds!: EntityTable<Round, 'id'>;
 
   constructor(name = 'tenis-torneos') {
     super(name);
@@ -34,6 +35,9 @@ export class TenisDatabase extends Dexie {
       tournaments: 'id, status, date',
       entries: 'id, tournamentId',
       matches: 'id, tournamentId',
+    });
+    this.version(3).stores({
+      rounds: 'id, tournamentId',
     });
   }
 }

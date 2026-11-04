@@ -82,6 +82,7 @@ test('crear torneo → inscribir → generar cruces → cargar resultados → ca
 
   // Cabezas de serie: Ana (1) y Carla (2) → no se cruzan antes de la final
   await page.getByRole('link', { name: 'Cabezas de serie' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Cabezas de serie' })).toBeVisible();
   await page.getByRole('button', { name: /Ana Alonso/ }).click();
   await page.getByRole('button', { name: /Carla Castro/ }).click();
   await page.getByRole('button', { name: 'Guardar' }).click();

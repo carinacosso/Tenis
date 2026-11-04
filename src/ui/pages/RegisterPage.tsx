@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { type Player, fullName, searchPlayers } from '../../domain/player';
 import { activeEntries, confirmedEntries } from '../../domain/registration';
+import { playersPerEntry } from '../../domain/tournament';
 import { PlusIcon, SearchIcon } from '../components/Icons';
 import { Page } from '../components/Layout';
 import { Toast } from '../components/Toast';
@@ -33,7 +34,8 @@ export function RegisterPage() {
   }
 
   const { tournament, entries, players } = state;
-  const doubles = tournament.modality === 'doubles';
+  const doubles = playersPerEntry(tournament) === 2;
+  const mixed = tournament.format.kind === 'americano' && tournament.format.variant === 'mixed';
   const registered = new Set(activeEntries(entries).flatMap((e) => e.playerIds));
   const available = searchPlayers([...players.values()], query).filter(
     (p) => !registered.has(p.id) && p.id !== partner?.id,
@@ -133,7 +135,15 @@ export function RegisterPage() {
               >
                 <span className="flex-1">
                   <span className="block text-lg font-semibold">{fullName(p)}</span>
-                  <span className="text-neutral-700 dark:text-neutral-300">{p.level}</span>
+                  <span className="text-neutral-700 dark:text-neutral-300">
+                    {p.level}
+                    {mixed &&
+                      (p.sex === 'M'
+                        ? ' · Hombre'
+                        : p.sex === 'F'
+                          ? ' · Mujer'
+                          : ' · sin sexo indicado')}
+                  </span>
                 </span>
                 <PlusIcon className="text-brand-700 dark:text-ball" />
               </button>

@@ -1,13 +1,24 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { DEFAULT_SETS_SCORING, type SetsScoring, describeScoring } from '../../domain/scoring';
+import {
+  DEFAULT_POINTS_SCORING,
+  DEFAULT_SETS_SCORING,
+  POINT_TARGETS,
+  type ScoringConfig,
+  type SetsScoring,
+  describeScoring,
+} from '../../domain/scoring';
 import {
   FORMAT_LABELS,
+  type FormatChoice,
   LOCKED_AFTER_DRAW,
   type Modality,
   type Tournament,
   type TournamentDraft,
   type TournamentField,
+  formatChoice,
+  formatFromChoice,
+  isRotation,
 } from '../../domain/tournament';
 import { Page } from '../components/Layout';
 import { Button, Card, ChoiceGroup, TextField } from '../components/ui';
@@ -34,6 +45,14 @@ function toDraft(t: Tournament): TournamentDraft {
   return { name, date, venue, category, modality, format, scoring, maxEntries, entryFee };
 }
 
+const FORMAT_HELP: Record<FormatChoice, string> = {
+  knockout: 'Cuadro: el que pierde queda afuera.',
+  americano_doubles: 'Parejas que cambian cada ronda; cada uno suma los puntos de su pareja.',
+  americano_singles: 'Todos contra todos, suma de puntos individual.',
+  americano_mixed: 'Como el Americano dobles, con parejas siempre hombre + mujer.',
+  mexicano: 'Desde la ronda 2 se cruzan según el ranking: 1° y 4° vs 2° y 3°.',
+};
+
 const yesNo = [
   { value: 'yes', label: 'Sí' },
   { value: 'no', label: 'No' },
@@ -53,6 +72,9 @@ export function TournamentFormPage() {
   // Los números se editan como texto para permitir borrar el campo mientras se escribe.
   const [maxText, setMaxText] = useState('16');
   const [feeText, setFeeText] = useState('0');
+  const [roundsText, setRoundsText] = useState('');
+  const [customTarget, setCustomTarget] = useState('');
+  const [minutesText, setMinutesText] = useState('15');
 
   useEffect(() => {
     if (id === undefined) return;
@@ -62,6 +84,11 @@ export function TournamentFormPage() {
       setDraft(toDraft(t));
       setMaxText(String(t.maxEntries));
       setFeeText(String(t.entryFee));
+      if (isRotation(t.format) && t.format.rounds !== null) setRoundsText(String(t.format.rounds));
+      const { scoring } = t;
+      if (scoring.kind === 'points' && !POINT_TARGETS.some((p) => p === scoring.target))
+        setCustomTarget(String(scoring.target));
+      if (t.scoring.kind === 'time') setMinutesText(String(t.scoring.minutes));
       setLocked(t.drawGeneratedAt !== null);
       setLoaded(true);
     });
@@ -75,19 +102,57 @@ export function TournamentFormPage() {
     setErrors((e) => ({ ...e, [field]: undefined }));
   };
 
-  const scoring: SetsScoring = draft.scoring.kind === 'sets' ? draft.scoring : DEFAULT_SETS_SCORING;
-  const setScoring = (change: Partial<SetsScoring>) => {
-    const next = { ...scoring, ...change };
+  const rotation = isRotation(draft.format);
+  const choice = formatChoice(draft.format);
+
+  const chooseFormat = (next: FormatChoice) => {
+    const nextFormat = formatFromChoice(next, null);
+    setRoundsText('');
+    setDraft((d) => {
+      const nextRotation = isRotation(nextFormat);
+      // Al cambiar entre familias de formatos, se pasa a una puntuación compatible.
+      let scoring: ScoringConfig = d.scoring;
+      if (nextRotation && d.scoring.kind === 'sets') scoring = DEFAULT_POINTS_SCORING;
+      if (!nextRotation && d.scoring.kind !== 'sets') scoring = DEFAULT_SETS_SCORING;
+      return { ...d, format: nextFormat, scoring };
+    });
+    setErrors((e) => ({ ...e, format: undefined, scoring: undefined }));
+  };
+
+  const sets: SetsScoring = draft.scoring.kind === 'sets' ? draft.scoring : DEFAULT_SETS_SCORING;
+  const setSets = (change: Partial<SetsScoring>) => {
+    const next = { ...sets, ...change };
     if (next.bestOf === 1) next.decidingSet = 'full';
     set('scoring', next);
   };
 
+  // Opción marcada: por tiempo, un objetivo estándar (16, 21…) u "Otro" (customTarget con valor).
+  const pointsMode =
+    draft.scoring.kind === 'time'
+      ? 'time'
+      : customTarget !== '' || draft.scoring.kind !== 'points'
+        ? 'custom'
+        : String(draft.scoring.target);
+
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const toNumber = (text: string) =>
+      text.trim() === '' ? Number.NaN : Number(text.replace(',', '.'));
+    let format = draft.format;
+    if (isRotation(format)) {
+      format = { ...format, rounds: roundsText.trim() === '' ? null : toNumber(roundsText) };
+    }
+    let scoring = draft.scoring;
+    if (rotation && pointsMode === 'custom')
+      scoring = { kind: 'points', target: toNumber(customTarget) };
+    if (rotation && pointsMode === 'time')
+      scoring = { kind: 'time', minutes: toNumber(minutesText) };
     const full: TournamentDraft = {
       ...draft,
-      maxEntries: maxText.trim() === '' ? Number.NaN : Number(maxText),
-      entryFee: feeText.trim() === '' ? 0 : Number(feeText.replace(',', '.')),
+      format,
+      scoring,
+      maxEntries: toNumber(maxText),
+      entryFee: feeText.trim() === '' ? 0 : toNumber(feeText),
     };
     const result = editing ? await tournaments.update(id, full) : await tournaments.create(full);
     if (!result.ok) {
@@ -109,6 +174,7 @@ export function TournamentFormPage() {
 
   const isLocked = (field: TournamentField) => locked && LOCKED_AFTER_DRAW.includes(field);
   const levels = settings.status === 'ready' ? settings.data.levels : [];
+  const unit = rotation ? 'jugadores' : draft.modality === 'doubles' ? 'parejas' : 'jugadores';
 
   return (
     <Page title={title} back={back}>
@@ -161,28 +227,53 @@ export function TournamentFormPage() {
           </p>
         )}
 
-        <fieldset disabled={isLocked('modality')} className="disabled:opacity-60">
-          <ChoiceGroup<Modality>
-            label="Modalidad"
-            options={[
-              { value: 'singles', label: 'Singles' },
-              { value: 'doubles', label: 'Dobles' },
-            ]}
-            value={draft.modality}
-            error={errors.modality}
-            onChange={(v) => set('modality', v)}
+        <fieldset disabled={isLocked('format')} className="flex flex-col gap-2 disabled:opacity-60">
+          <ChoiceGroup<FormatChoice>
+            label="Formato"
+            options={(Object.keys(FORMAT_LABELS) as FormatChoice[]).map((value) => ({
+              value,
+              label: FORMAT_LABELS[value],
+            }))}
+            value={choice}
+            error={errors.format}
+            onChange={chooseFormat}
           />
+          <p className="text-neutral-700 dark:text-neutral-300">{FORMAT_HELP[choice]}</p>
         </fieldset>
 
-        <ChoiceGroup
-          label="Formato"
-          options={[{ value: 'knockout', label: FORMAT_LABELS.knockout }]}
-          value={draft.format.kind}
-          onChange={() => set('format', { kind: 'knockout' })}
-        />
-        <p className="-mt-3 text-neutral-600 dark:text-neutral-400">
-          Grupos, liga, Americano y Mexicano llegan en las próximas versiones.
-        </p>
+        {!rotation && (
+          <fieldset disabled={isLocked('modality')} className="disabled:opacity-60">
+            <ChoiceGroup<Modality>
+              label="Modalidad"
+              options={[
+                { value: 'singles', label: 'Singles' },
+                { value: 'doubles', label: 'Dobles' },
+              ]}
+              value={draft.modality}
+              error={errors.modality}
+              onChange={(v) => set('modality', v)}
+            />
+          </fieldset>
+        )}
+
+        {rotation && (
+          <fieldset disabled={isLocked('format')} className="disabled:opacity-60">
+            <TextField
+              label="Cantidad de rondas"
+              type="number"
+              inputMode="numeric"
+              min={1}
+              placeholder="Automático"
+              value={roundsText}
+              error={errors.format}
+              hint="Vacío = rotación completa (todos juegan con todos una vez)."
+              onChange={(e) => {
+                setRoundsText(e.target.value);
+                setErrors((x) => ({ ...x, format: undefined }));
+              }}
+            />
+          </fieldset>
+        )}
 
         <Card>
           <fieldset
@@ -190,62 +281,110 @@ export function TournamentFormPage() {
             className="flex flex-col gap-4 disabled:opacity-60"
           >
             <legend className="text-xl font-bold">Puntuación</legend>
-            <ChoiceGroup
-              label="Games por set"
-              options={[
-                { value: '6', label: 'A 6' },
-                { value: '4', label: 'A 4' },
-              ]}
-              value={String(scoring.gamesPerSet)}
-              onChange={(v) => setScoring({ gamesPerSet: v === '4' ? 4 : 6 })}
-            />
-            <ChoiceGroup
-              label="Sets"
-              options={[
-                { value: '1', label: '1 set' },
-                { value: '3', label: '2 de 3' },
-                { value: '5', label: '3 de 5' },
-              ]}
-              value={String(scoring.bestOf)}
-              onChange={(v) => setScoring({ bestOf: v === '1' ? 1 : v === '5' ? 5 : 3 })}
-            />
-            <ChoiceGroup
-              label="Tie-break"
-              options={[
-                { value: 'no', label: 'No' },
-                { value: '7', label: 'A 7' },
-                { value: '10', label: 'A 10' },
-              ]}
-              value={scoring.tiebreak.enabled ? String(scoring.tiebreak.points) : 'no'}
-              onChange={(v) =>
-                setScoring({
-                  tiebreak:
-                    v === 'no'
-                      ? { enabled: false, points: 7 }
-                      : { enabled: true, points: Number(v) },
-                })
-              }
-            />
-            {scoring.bestOf > 1 && (
-              <ChoiceGroup
-                label="Set decisivo"
-                options={[
-                  { value: 'full', label: 'Set completo' },
-                  { value: 'superTiebreak', label: 'Super tie-break a 10' },
-                ]}
-                value={scoring.decidingSet}
-                onChange={(v) => setScoring({ decidingSet: v })}
-              />
+            {rotation ? (
+              <>
+                <ChoiceGroup
+                  label="Cada partido"
+                  options={[
+                    ...POINT_TARGETS.map((p) => ({ value: String(p), label: `A ${p}` })),
+                    { value: 'custom', label: 'Otro' },
+                    { value: 'time', label: 'Por tiempo' },
+                  ]}
+                  value={pointsMode}
+                  onChange={(v) => {
+                    setErrors((x) => ({ ...x, scoring: undefined }));
+                    if (v === 'time') {
+                      setCustomTarget('');
+                      set('scoring', { kind: 'time', minutes: Number(minutesText) || 15 });
+                    } else if (v === 'custom') {
+                      setCustomTarget(customTarget || '18');
+                      set('scoring', { kind: 'points', target: Number(customTarget) || 18 });
+                    } else {
+                      setCustomTarget('');
+                      set('scoring', { kind: 'points', target: Number(v) });
+                    }
+                  }}
+                />
+                {pointsMode === 'custom' && (
+                  <TextField
+                    label="Puntos para ganar"
+                    type="number"
+                    inputMode="numeric"
+                    value={customTarget}
+                    onChange={(e) => setCustomTarget(e.target.value)}
+                  />
+                )}
+                {pointsMode === 'time' && (
+                  <TextField
+                    label="Minutos por partido"
+                    type="number"
+                    inputMode="numeric"
+                    value={minutesText}
+                    hint="Al terminar el tiempo se anotan los puntos; puede haber empate."
+                    onChange={(e) => setMinutesText(e.target.value)}
+                  />
+                )}
+              </>
+            ) : (
+              <>
+                <ChoiceGroup
+                  label="Games por set"
+                  options={[
+                    { value: '6', label: 'A 6' },
+                    { value: '4', label: 'A 4' },
+                  ]}
+                  value={String(sets.gamesPerSet)}
+                  onChange={(v) => setSets({ gamesPerSet: v === '4' ? 4 : 6 })}
+                />
+                <ChoiceGroup
+                  label="Sets"
+                  options={[
+                    { value: '1', label: '1 set' },
+                    { value: '3', label: '2 de 3' },
+                    { value: '5', label: '3 de 5' },
+                  ]}
+                  value={String(sets.bestOf)}
+                  onChange={(v) => setSets({ bestOf: v === '1' ? 1 : v === '5' ? 5 : 3 })}
+                />
+                <ChoiceGroup
+                  label="Tie-break"
+                  options={[
+                    { value: 'no', label: 'No' },
+                    { value: '7', label: 'A 7' },
+                    { value: '10', label: 'A 10' },
+                  ]}
+                  value={sets.tiebreak.enabled ? String(sets.tiebreak.points) : 'no'}
+                  onChange={(v) =>
+                    setSets({
+                      tiebreak:
+                        v === 'no'
+                          ? { enabled: false, points: 7 }
+                          : { enabled: true, points: Number(v) },
+                    })
+                  }
+                />
+                {sets.bestOf > 1 && (
+                  <ChoiceGroup
+                    label="Set decisivo"
+                    options={[
+                      { value: 'full', label: 'Set completo' },
+                      { value: 'superTiebreak', label: 'Super tie-break a 10' },
+                    ]}
+                    value={sets.decidingSet}
+                    onChange={(v) => setSets({ decidingSet: v })}
+                  />
+                )}
+                <ChoiceGroup
+                  label="Punto de oro (sin ventaja)"
+                  options={yesNo}
+                  value={sets.goldenPoint ? 'yes' : 'no'}
+                  onChange={(v) => setSets({ goldenPoint: v === 'yes' })}
+                />
+                <p className="font-medium" aria-live="polite">
+                  {describeScoring(sets)}
+                </p>
+              </>
             )}
-            <ChoiceGroup
-              label="Punto de oro (sin ventaja)"
-              options={yesNo}
-              value={scoring.goldenPoint ? 'yes' : 'no'}
-              onChange={(v) => setScoring({ goldenPoint: v === 'yes' })}
-            />
-            <p className="font-medium" aria-live="polite">
-              {describeScoring(scoring)}
-            </p>
             {errors.scoring && (
               <p className="font-medium text-red-700 dark:text-red-400">{errors.scoring}</p>
             )}
@@ -259,7 +398,7 @@ export function TournamentFormPage() {
           min={2}
           value={maxText}
           error={errors.maxEntries}
-          hint={draft.modality === 'doubles' ? 'Cantidad de parejas.' : 'Cantidad de jugadores.'}
+          hint={`Cantidad de ${unit}.`}
           onChange={(e) => {
             setMaxText(e.target.value);
             setErrors((x) => ({ ...x, maxEntries: undefined }));

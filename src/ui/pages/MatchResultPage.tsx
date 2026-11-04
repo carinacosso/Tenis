@@ -12,11 +12,13 @@ import {
   setsToWin,
 } from '../../domain/scoring';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { isRotation } from '../../domain/tournament';
 import { Page } from '../components/Layout';
 import { Button, Card } from '../components/ui';
 import { entryName } from '../format';
 import { useTournament } from '../hooks/useTournament';
 import { useServices } from '../ServicesContext';
+import { ScoreResultForm } from './ScoreResultForm';
 
 interface SetInput {
   winner: Side | null;
@@ -85,6 +87,19 @@ export function MatchResultPage() {
         <p aria-busy="true">Cargando…</p>
       </Page>
     );
+  }
+
+  if (isRotation(state.tournament.format)) {
+    const match = state.matches.find((m) => m.id === matchId);
+    const rotationBack = `/torneos/${id}?tab=rondas`;
+    if (!match) {
+      return (
+        <Page title="Resultado" back={rotationBack}>
+          <p className="text-lg">No encontramos ese partido.</p>
+        </Page>
+      );
+    }
+    return <ScoreResultForm key={match.id} data={state} match={match} back={rotationBack} />;
   }
 
   const target = resolved.get(matchId);

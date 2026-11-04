@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_SETS_SCORING } from './scoring';
-import { type TournamentDraft, validateTournamentDraft } from './tournament';
+import {
+  type TournamentDraft,
+  formatChoice,
+  formatFromChoice,
+  formatLabel,
+  isRotation,
+  minEntriesFor,
+  playersPerEntry,
+  validateTournamentDraft,
+} from './tournament';
 
 const draft: TournamentDraft = {
   name: '  Torneo   Apertura ',
@@ -48,5 +57,59 @@ describe('validateTournamentDraft', () => {
     const r = validateTournamentDraft({ ...draft, maxEntries: 4 }, 6);
     expect(r).toEqual({ ok: false, errors: { maxEntries: 'Ya hay 6 inscriptos confirmados.' } });
     expect(validateTournamentDraft({ ...draft, maxEntries: 129 }).ok).toBe(false);
+  });
+});
+
+describe('formatos rotativos', () => {
+  const rotation: TournamentDraft = {
+    ...draft,
+    format: { kind: 'americano', variant: 'singles', rounds: null },
+    scoring: { kind: 'points', target: 21 },
+    modality: 'doubles',
+  };
+
+  it('fija la modalidad según el formato', () => {
+    const r = validateTournamentDraft(rotation);
+    expect(r.ok && r.value.modality).toBe('singles');
+    const mex = validateTournamentDraft({ ...rotation, format: { kind: 'mexicano', rounds: 5 } });
+    expect(mex.ok && mex.value.modality).toBe('doubles');
+  });
+
+  it('exige puntos o tiempo en rotativos y sets en eliminación directa', () => {
+    expect(validateTournamentDraft({ ...rotation, scoring: DEFAULT_SETS_SCORING }).ok).toBe(false);
+    expect(
+      validateTournamentDraft({ ...rotation, scoring: { kind: 'time', minutes: 15 } }).ok,
+    ).toBe(true);
+    expect(validateTournamentDraft({ ...draft, scoring: { kind: 'points', target: 21 } }).ok).toBe(
+      false,
+    );
+  });
+
+  it('valida la cantidad de rondas', () => {
+    const bad = validateTournamentDraft({
+      ...rotation,
+      format: { kind: 'americano', variant: 'doubles', rounds: 0 },
+    });
+    expect(bad.ok).toBe(false);
+    if (bad.ok) return;
+    expect(bad.errors.format).toBeDefined();
+  });
+
+  it('mínimos y jugadores por inscripción', () => {
+    expect(minEntriesFor({ kind: 'mexicano', rounds: null })).toBe(4);
+    expect(minEntriesFor({ kind: 'americano', variant: 'singles', rounds: null })).toBe(2);
+    expect(
+      playersPerEntry({ modality: 'doubles', format: { kind: 'mexicano', rounds: null } }),
+    ).toBe(1);
+    expect(playersPerEntry({ modality: 'doubles', format: { kind: 'knockout' } })).toBe(2);
+  });
+
+  it('etiquetas y conversión de formato', () => {
+    const f = formatFromChoice('americano_mixed', 4);
+    expect(f).toEqual({ kind: 'americano', variant: 'mixed', rounds: 4 });
+    expect(formatChoice(f)).toBe('americano_mixed');
+    expect(formatLabel(f)).toBe('Americano mixto');
+    expect(isRotation(f)).toBe(true);
+    expect(isRotation({ kind: 'knockout' })).toBe(false);
   });
 });

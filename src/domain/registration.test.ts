@@ -130,3 +130,30 @@ describe('generar cruces y pagos', () => {
     expect(paymentSummary(entries)).toEqual({ paid: 1000, pending: 2000, pendingPlayers: 2 });
   });
 });
+
+describe('Americano mixto', () => {
+  const mixed = makeTournament({
+    modality: 'doubles',
+    format: { kind: 'americano', variant: 'mixed', rounds: null },
+  });
+  const sexes: Record<string, 'M' | 'F' | null> = { m1: 'M', m2: 'M', f1: 'F', f2: 'F', x: null };
+  const sexOf = (id: string) => sexes[id] ?? null;
+
+  it('inscripción individual y con sexo indicado', () => {
+    expect(checkRegistration(mixed, [], ['m1'], sexOf)).toBeNull();
+    expect(checkRegistration(mixed, [], ['m1', 'f1'], sexOf)).toBe('Elegí un jugador.');
+    expect(checkRegistration(mixed, [], ['x'], sexOf)).toMatch(/sexo/);
+  });
+
+  it('para generar hacen falta 2 hombres y 2 mujeres', () => {
+    const entry = (id: string) => makeEntry({ id: `e-${id}`, playerIds: [id] });
+    expect(checkCanGenerateDraw(mixed, ['m1', 'm2', 'f1', 'f2'].map(entry), sexOf)).toBeNull();
+    const fewWomen = ['m1', 'm2', 'f1', 'x'].map(entry);
+    expect(checkCanGenerateDraw(mixed, fewWomen, sexOf)).toBe('Hay jugadores sin sexo indicado.');
+    const sexes2 = (id: string) => (id.startsWith('m') ? 'M' : 'F');
+    const threeMen = ['m1', 'm2', 'm3', 'f1'].map(entry);
+    expect(checkCanGenerateDraw(mixed, threeMen, sexes2)).toBe(
+      'Se necesitan al menos 2 hombres y 2 mujeres (hay 3 y 1).',
+    );
+  });
+});

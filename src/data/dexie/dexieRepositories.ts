@@ -8,6 +8,7 @@ import type {
   MatchRepository,
   PlayerRepository,
   Repositories,
+  RoundRepository,
   SettingsRepository,
   TournamentRepository,
   Unsubscribe,
@@ -84,8 +85,28 @@ export function createDexieRepositories(db: TenisDatabase = new TenisDatabase())
     deleteByTournament: async (tid) => {
       await db.matches.where('tournamentId').equals(tid).delete();
     },
+    deleteMany: async (ids) => {
+      await db.matches.bulkDelete([...ids]);
+    },
     observeByTournament: (tid, listener, onError) =>
       observe(() => matchesOf(tid), listener, onError),
+  };
+
+  const roundsOf = (tid: Id) => db.rounds.where('tournamentId').equals(tid).toArray();
+  const rounds: RoundRepository = {
+    listByTournament: roundsOf,
+    listAll: () => db.rounds.toArray(),
+    saveMany: async (rows) => {
+      await db.rounds.bulkPut([...rows]);
+    },
+    deleteByTournament: async (tid) => {
+      await db.rounds.where('tournamentId').equals(tid).delete();
+    },
+    deleteMany: async (ids) => {
+      await db.rounds.bulkDelete([...ids]);
+    },
+    observeByTournament: (tid, listener, onError) =>
+      observe(() => roundsOf(tid), listener, onError),
   };
 
   const settings: SettingsRepository = {
@@ -102,6 +123,7 @@ export function createDexieRepositories(db: TenisDatabase = new TenisDatabase())
     tournaments,
     entries,
     matches,
+    rounds,
     settings,
     transaction: (work) => db.transaction('rw', db.tables, work),
     clearAll: async () => {

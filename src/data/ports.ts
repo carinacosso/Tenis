@@ -1,5 +1,5 @@
 import type { Id } from '../domain/common';
-import type { Match } from '../domain/knockout';
+import type { Match, Round } from '../domain/match';
 import type { Player } from '../domain/player';
 import type { Entry } from '../domain/registration';
 import type { AppSettings } from '../domain/settings';
@@ -58,11 +58,26 @@ export interface MatchRepository {
   listByTournament(tournamentId: Id): Promise<Match[]>;
   listAll(): Promise<Match[]>;
   saveMany(matches: readonly Match[]): Promise<void>;
+  deleteMany(ids: readonly Id[]): Promise<void>;
   /** Borra físicamente los partidos del torneo (al regenerar los cruces). */
   deleteByTournament(tournamentId: Id): Promise<void>;
   observeByTournament(
     tournamentId: Id,
     listener: Listener<Match[]>,
+    onError?: ErrorListener,
+  ): Unsubscribe;
+}
+
+export interface RoundRepository {
+  listByTournament(tournamentId: Id): Promise<Round[]>;
+  listAll(): Promise<Round[]>;
+  saveMany(rounds: readonly Round[]): Promise<void>;
+  deleteByTournament(tournamentId: Id): Promise<void>;
+  /** Borra rondas puntuales (por ejemplo, al deshacer la última ronda de un Mexicano). */
+  deleteMany(ids: readonly Id[]): Promise<void>;
+  observeByTournament(
+    tournamentId: Id,
+    listener: Listener<Round[]>,
     onError?: ErrorListener,
   ): Unsubscribe;
 }
@@ -78,6 +93,7 @@ export interface Repositories {
   tournaments: TournamentRepository;
   entries: EntryRepository;
   matches: MatchRepository;
+  rounds: RoundRepository;
   settings: SettingsRepository;
   /** Ejecuta varias operaciones de forma atómica. */
   transaction<T>(work: () => Promise<T>): Promise<T>;

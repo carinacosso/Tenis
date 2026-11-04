@@ -1,25 +1,10 @@
-import type { EntityBase, Id } from './common';
+import type { Id } from './common';
+import type { Match, MatchPlan, SideSource } from './match';
 import { type Rng, shuffle } from './random';
 import { bracketSize } from './registration';
 import type { MatchResult } from './scoring';
 
-/** De dónde sale cada lado de un partido. */
-export type SideSource =
-  { kind: 'entry'; entryId: Id } | { kind: 'bye' } | { kind: 'winnerOf'; matchId: Id };
-
-export interface Match extends EntityBase {
-  tournamentId: Id;
-  /** Ronda, desde 1. */
-  round: number;
-  /** Posición dentro de la ronda, desde 0 (de arriba hacia abajo en el cuadro). */
-  position: number;
-  sideA: SideSource;
-  sideB: SideSource;
-  result: MatchResult | null;
-}
-
-/** Partido generado por el sorteo, antes de agregarle los campos de persistencia. */
-export type MatchPlan = Pick<Match, 'id' | 'round' | 'position' | 'sideA' | 'sideB'>;
+export type { Match, MatchPlan, SideSource } from './match';
 
 export interface DrawEntrant {
   id: Id;
@@ -187,6 +172,7 @@ export function resolveKnockout(matches: readonly Match[]): Map<Id, ResolvedMatc
   const sideEntry = (source: SideSource): Id | null => {
     if (source.kind === 'entry') return source.entryId;
     if (source.kind === 'bye') return null;
+    if (source.kind === 'entries') return source.entryIds[0] ?? null;
     return resolved.get(source.matchId)?.winner ?? null;
   };
   for (const match of sorted) {

@@ -1,4 +1,5 @@
 import type { EntityBase, Id, IsoDateTime } from './common';
+import type { Sex } from './player';
 import { type Tournament, minEntriesFor, playersPerEntry } from './tournament';
 
 export type EntryStatus = 'confirmed' | 'waitlist' | 'withdrawn';
@@ -46,17 +47,24 @@ export function checkRegistration(
   tournament: Tournament,
   entries: readonly Entry[],
   playerIds: readonly Id[],
+  sexOf: (playerId: Id) => Sex | null = () => null,
 ): string | null {
   if (tournament.drawGeneratedAt !== null)
     return 'Los cruces ya están generados: la inscripción está cerrada.';
-  const needed = playersPerEntry(tournament.modality);
+  const needed = playersPerEntry(tournament);
   if (playerIds.length !== needed)
     return needed === 1 ? 'Elegí un jugador.' : 'Elegí los dos jugadores de la pareja.';
   if (new Set(playerIds).size !== playerIds.length) return 'Elegí dos jugadores distintos.';
   const registered = new Set(activeEntries(entries).flatMap((e) => e.playerIds));
   if (playerIds.some((id) => registered.has(id)))
     return 'Ese jugador ya está inscripto en este torneo.';
+  if (isMixed(tournament) && playerIds.some((id) => sexOf(id) === null))
+    return 'En el Americano mixto hay que indicar el sexo del jugador (editalo en su ficha).';
   return null;
+}
+
+function isMixed(tournament: Tournament): boolean {
+  return tournament.format.kind === 'americano' && tournament.format.variant === 'mixed';
 }
 
 /** Estado inicial de una inscripción nueva según el cupo. */
@@ -102,10 +110,20 @@ export function checkSeeds(entries: readonly Entry[], seededIds: readonly Id[]):
 export function checkCanGenerateDraw(
   tournament: Tournament,
   entries: readonly Entry[],
+  sexOf: (playerId: Id) => Sex | null = () => null,
 ): string | null {
   const min = minEntriesFor(tournament.format);
-  const count = confirmedEntries(entries).length;
+  const confirmed = confirmedEntries(entries);
+  const count = confirmed.length;
   if (count < min) return `Se necesitan al menos ${min} inscriptos confirmados (hay ${count}).`;
+  if (isMixed(tournament)) {
+    const sexes = confirmed.map((e) => sexOf(e.playerIds[0] ?? ''));
+    if (sexes.some((x) => x === null)) return 'Hay jugadores sin sexo indicado.';
+    const men = sexes.filter((x) => x === 'M').length;
+    const women = sexes.filter((x) => x === 'F').length;
+    if (men < 2 || women < 2)
+      return `Se necesitan al menos 2 hombres y 2 mujeres (hay ${men} y ${women}).`;
+  }
   return null;
 }
 
