@@ -28,6 +28,8 @@ import { MatchCard } from '../components/MatchCard';
 import { RankingTab, RotationPodium, RoundsTab } from '../components/RotationTabs';
 import { GroupsTab, LeaguePodium, LeagueTableTab } from '../components/StandingsTabs';
 import { bracketMatches, matchTitle } from '../matchTitle';
+import { consolationMatches } from '../../domain/consolation';
+import type { Match } from '../../domain/match';
 import { Tabs } from '../components/Tabs';
 import { Toast } from '../components/Toast';
 import { useToast } from '../hooks/useToast';
@@ -136,6 +138,8 @@ export function TournamentPage() {
 
 function PodiumCard({ data }: { data: TournamentData }) {
   const podium = knockoutPodium(bracketMatches(data.matches));
+  const consolation = consolationMatches(data.matches);
+  const consolationChampion = consolation.length > 0 ? knockoutPodium(consolation).champion : null;
   const name = (id: string | null) =>
     id ? entryName(data.entriesById.get(id), data.players) : '—';
   return (
@@ -151,6 +155,12 @@ function PodiumCard({ data }: { data: TournamentData }) {
           <>
             <dt className="font-semibold">Semifinalistas</dt>
             <dd>{podium.thirds.map(name).join(' · ')}</dd>
+          </>
+        )}
+        {consolationChampion && (
+          <>
+            <dt className="font-semibold">Consolación</dt>
+            <dd>{name(consolationChampion)}</dd>
           </>
         )}
       </dl>
@@ -486,22 +496,55 @@ function MatchesTab({ data }: { data: TournamentData }) {
 // ── Cuadro ────────────────────────────────────────────────
 
 function BracketTab({ data }: { data: TournamentData }) {
-  const { resolved: all, rounds, nameOf, inBracket } = useResolved(data);
-  const resolved = all.filter((r) => inBracket.has(r.match.id));
+  const [which, setWhich] = useState<'main' | 'consolation'>('main');
+  if (data.matches.length === 0) return <NoDraw />;
+  const main = bracketMatches(data.matches);
+  const consolation = consolationMatches(data.matches);
+  const hasConsolation =
+    data.tournament.format.kind === 'knockout' && data.tournament.format.consolation === true;
+  const showing = which === 'consolation' ? consolation : main;
+
+  return (
+    <>
+      {hasConsolation && (
+        <Tabs<'main' | 'consolation'>
+          label="Cuadros"
+          tabs={[
+            { value: 'main', label: 'Principal' },
+            { value: 'consolation', label: 'Consolación' },
+          ]}
+          value={which}
+          onChange={setWhich}
+        />
+      )}
+      {showing.length === 0 ? (
+        <EmptyState
+          title={
+            which === 'consolation' ? 'Todavía no hay consolación' : 'Todavía no hay cuadro final'
+          }
+        >
+          <p className="text-lg text-neutral-700 dark:text-neutral-300">
+            {which === 'consolation'
+              ? 'Se sortea sola cuando todos jugaron su primer partido. Entran los que lo perdieron (no los que perdieron por W.O. o lesión).'
+              : 'Se arma solo cuando terminan todos los partidos de los grupos.'}
+          </p>
+        </EmptyState>
+      ) : (
+        <BracketView key={which} data={data} matches={showing} />
+      )}
+    </>
+  );
+}
+
+function BracketView({ data, matches }: { data: TournamentData; matches: readonly Match[] }) {
+  const { resolved: all, nameOf } = useResolved(data);
+  const ids = new Set(matches.map((m) => m.id));
+  const resolved = all.filter((r) => ids.has(r.match.id));
+  const rounds = Math.max(1, ...matches.map((m) => m.round));
   const firstPending = resolved
     .filter((r) => r.state === 'ready')
     .reduce((min, r) => Math.min(min, r.match.round), rounds);
   const [selected, setSelected] = useState<number | null>(null);
-  if (data.matches.length === 0) return <NoDraw />;
-  if (resolved.length === 0) {
-    return (
-      <EmptyState title="Todavía no hay cuadro final">
-        <p className="text-lg text-neutral-700 dark:text-neutral-300">
-          Se arma solo cuando terminan todos los partidos de los grupos.
-        </p>
-      </EmptyState>
-    );
-  }
   const round = selected ?? Math.max(1, firstPending);
   const inRound = resolved
     .filter((r) => r.match.round === round)

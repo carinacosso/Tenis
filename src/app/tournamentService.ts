@@ -35,7 +35,13 @@ import {
   nextRoundBlocker,
   rotationStandings,
 } from '../domain/rotationStandings';
-import { type MatchResult, checkResult } from '../domain/scoring';
+import { type MatchResult, type ScoringConfig, checkResult, walkoverSets } from '../domain/scoring';
+import {
+  consolationEntrants,
+  consolationMatches,
+  generateConsolation,
+  mainDrawMatches,
+} from '../domain/consolation';
 import {
   LOCKED_AFTER_DRAW,
   type Tournament,
@@ -57,6 +63,61 @@ export type RecordResultOutcome =
   | { status: 'invalid'; error: string };
 
 const ok = <T>(value: T): ActionResult<T> => ({ ok: true, value });
+
+/**
+ * Eliminación directa terminada: se jugó la final del principal y, si el torneo tiene consolación
+ * (y entraron al menos 2), también la final de la consolación.
+ */
+function isKnockoutTournamentFinished(
+  matches: readonly Match[],
+  withConsolation: boolean,
+): boolean {
+  const main = mainDrawMatches(matches);
+  if (!isKnockoutFinished(main)) return false;
+  if (!withConsolation || consolationEntrants(main).entrants.length < 2) return true;
+  const consolation = consolationMatches(matches);
+  return consolation.length > 0 && isKnockoutFinished(consolation);
+}
+
+/**
+ * Retiro por lesión en grupos o liga: el lesionado pierde por W.O. los partidos de grupo que le
+ * quedaban. Si ese resultado se cambia, se sacan los W.O. que había puesto automáticamente.
+ */
+function applyInjuryWalkovers(
+  matches: Match[],
+  target: Match,
+  result: MatchResult | null,
+  scoring: ScoringConfig,
+): Match[] {
+  let updated = matches.map((m) =>
+    m.result?.kind === 'sets' && m.result.autoWalkoverFrom === target.id
+      ? { ...m, result: null }
+      : m,
+  );
+  if (result?.kind !== 'sets' || result.outcome !== 'injury' || scoring.kind !== 'sets')
+    return updated;
+  const loserSide = result.winner === 'A' ? target.sideB : target.sideA;
+  const injured = loserSide.kind === 'entry' ? loserSide.entryId : null;
+  if (!injured) return updated;
+  updated = updated.map((m) => {
+    if (m.id === target.id || m.stage !== 'group' || m.result !== null) return m;
+    const a = m.sideA.kind === 'entry' ? m.sideA.entryId : null;
+    const b = m.sideB.kind === 'entry' ? m.sideB.entryId : null;
+    if (a !== injured && b !== injured) return m;
+    const winner = a === injured ? 'B' : 'A';
+    return {
+      ...m,
+      result: {
+        kind: 'sets',
+        outcome: 'walkover',
+        sets: walkoverSets(scoring, winner),
+        winner,
+        autoWalkoverFrom: target.id,
+      },
+    };
+  });
+  return updated;
+}
 const fail = (error: string): ActionResult<never> => ({ ok: false, error });
 
 export class TournamentService {
@@ -504,10 +565,20 @@ export class TournamentService {
       const rounds = await this.repos.rounds.listByTournament(tournament.id);
       finished = isRotationFinished(tournament.plannedRounds, updated, rounds);
     } else if (format.kind === 'league') {
-      updated = matches.map((m) => (m.id === matchId ? { ...m, result } : m));
+      updated = applyInjuryWalkovers(
+        matches.map((m) => (m.id === matchId ? { ...m, result } : m)),
+        target,
+        result,
+        tournament.scoring,
+      );
       finished = updated.every((m) => m.result !== null);
     } else if (format.kind === 'groups' && target.stage === 'group') {
-      updated = matches.map((m) => (m.id === matchId ? { ...m, result } : m));
+      updated = applyInjuryWalkovers(
+        matches.map((m) => (m.id === matchId ? { ...m, result } : m)),
+        target,
+        result,
+        tournament.scoring,
+      );
       const sync = await this.syncPlayoff(tournament, updated, now);
       removed = sync.removed;
       created = sync.created;
@@ -523,8 +594,21 @@ export class TournamentService {
       } catch (error) {
         return { status: 'invalid', error: error instanceof Error ? error.message : String(error) };
       }
+      if (format.kind === 'knockout' && target.stage !== 'consolation') {
+        const sync = this.syncConsolation(tournament, updated, now);
+        removed = sync.removed;
+        created = sync.created;
+        cleared = [...cleared.filter((id) => !removed.includes(id)), ...sync.cleared];
+        updated = [...updated.filter((m) => !removed.includes(m.id)), ...created];
+      }
       if (cleared.length > 0 && !confirmed) return { status: 'needsConfirmation', cleared };
-      finished = isKnockoutFinished(format.kind === 'groups' ? playoffMatches(updated) : updated);
+      finished =
+        format.kind === 'groups'
+          ? isKnockoutFinished(playoffMatches(updated))
+          : isKnockoutTournamentFinished(
+              updated,
+              format.kind === 'knockout' && format.consolation === true,
+            );
     }
 
     const before = new Map(matches.map((m) => [m.id, m]));
@@ -548,6 +632,41 @@ export class TournamentService {
       }
     });
     return { status: 'saved', cleared };
+  }
+
+  /**
+   * Mantiene el cuadro de consolación al día con el cuadro principal: se sortea cuando todos
+   * jugaron su primer partido y se vuelve a sortear si cambian los que entran.
+   */
+  private syncConsolation(
+    tournament: Tournament,
+    matches: readonly Match[],
+    now: string,
+  ): { removed: Id[]; created: Match[]; cleared: Id[] } {
+    const existing = consolationMatches(matches);
+    const none = { removed: [], created: [], cleared: [] };
+    if (tournament.format.kind !== 'knockout' || !tournament.format.consolation) return none;
+    const { complete, entrants } = consolationEntrants(mainDrawMatches(matches));
+    let created: Match[] = [];
+    if (complete && entrants.length >= 2) {
+      const current = existing
+        .filter((m) => m.round === 1)
+        .flatMap((m) => [m.sideA, m.sideB])
+        .flatMap((x) => (x.kind === 'entry' ? [x.entryId] : []))
+        .sort();
+      if (existing.length > 0 && JSON.stringify(current) === JSON.stringify([...entrants].sort()))
+        return none;
+      created = this.toMatches(
+        tournament.id,
+        generateConsolation(entrants, this.deps.random, this.deps.newId),
+        now,
+      );
+    }
+    return {
+      removed: existing.map((m) => m.id),
+      created,
+      cleared: existing.filter((m) => m.result !== null).map((m) => m.id),
+    };
   }
 
   /**

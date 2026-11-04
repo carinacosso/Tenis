@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SETS_SCORING,
+  buildWalkover,
+  checkRetiredSets,
+  effectiveSets,
+  walkoverSets,
   buildScoreResult,
   checkTimeResult,
   pointsOf,
@@ -309,5 +313,161 @@ describe('por tiempo y armado de resultados', () => {
     expect(formatResultForWinner(r)).toBe('21-15');
     expect(describeScoring({ kind: 'points', target: 24 })).toBe('Partidos a 24 puntos');
     expect(describeScoring({ kind: 'time', minutes: 12 })).toBe('Por tiempo: 12 minutos');
+  });
+});
+
+describe('W.O., abandono y lesión', () => {
+  it('W.O. por sets: 6-0 6-0 (o 10-0 en super tie-break) para el ganador', () => {
+    expect(walkoverSets(sixWithTb, 'A')).toEqual([
+      { a: 6, b: 0 },
+      { a: 6, b: 0 },
+    ]);
+    expect(walkoverSets({ ...superTb, bestOf: 3 }, 'B')).toEqual([
+      { a: 0, b: 6 },
+      { a: 0, b: 6 },
+    ]);
+    expect(walkoverSets({ ...sixWithTb, bestOf: 1 }, 'A')).toEqual([{ a: 6, b: 0 }]);
+    const wo = buildWalkover(sixWithTb, 'B');
+    expect(wo.ok && wo.result).toMatchObject({ kind: 'sets', outcome: 'walkover', winner: 'B' });
+    if (!wo.ok) return;
+    expect(checkResult(sixWithTb, wo.result)).toEqual({ ok: true, winner: 'B' });
+    expect(formatResult(wo.result)).toBe('W.O.');
+  });
+
+  it('W.O. a puntos: puntaje máximo contra 0; por tiempo no hay W.O.', () => {
+    const wo = buildWalkover({ kind: 'points', target: 21 }, 'A');
+    expect(wo.ok && wo.result).toEqual({
+      kind: 'points',
+      outcome: 'walkover',
+      a: 21,
+      b: 0,
+      winner: 'A',
+    });
+    expect(buildWalkover({ kind: 'time', minutes: 10 }, 'A').ok).toBe(false);
+    const bad = {
+      kind: 'points' as const,
+      outcome: 'walkover' as const,
+      a: 21,
+      b: 5,
+      winner: 'A' as const,
+    };
+    expect(checkResult({ kind: 'points', target: 21 }, bad).ok).toBe(false);
+  });
+
+  it('un W.O. con sets cambiados no es válido', () => {
+    const r = {
+      kind: 'sets' as const,
+      outcome: 'walkover' as const,
+      sets: [{ a: 6, b: 3 }],
+      winner: 'A' as const,
+    };
+    expect(checkResult(sixWithTb, r).ok).toBe(false);
+  });
+
+  it('abandono: sets completos válidos y el último puede quedar a medias', () => {
+    expect(checkRetiredSets(sixWithTb, [])).toBeNull();
+    expect(
+      checkRetiredSets(sixWithTb, [
+        { a: 6, b: 3 },
+        { a: 2, b: 1 },
+      ]),
+    ).toBeNull();
+    expect(checkRetiredSets(sixWithTb, [{ a: 6, b: 6 }])).toBeNull(); // en el tie-break
+    expect(checkRetiredSets(sixWithTb, [{ a: 6, b: 3 }])).toBeNull(); // entre sets
+    expect(
+      checkRetiredSets(sixWithTb, [
+        { a: 6, b: 5 },
+        { a: 1, b: 0 },
+      ]),
+    ).not.toBeNull();
+    expect(
+      checkRetiredSets(sixWithTb, [
+        { a: 6, b: 3 },
+        { a: 6, b: 3 },
+      ]),
+    ).toBe('El partido ya estaba definido antes del abandono.');
+    const r = {
+      kind: 'sets' as const,
+      outcome: 'retired' as const,
+      sets: [
+        { a: 6, b: 3 },
+        { a: 2, b: 1 },
+      ],
+      winner: 'B' as const,
+    };
+    expect(checkResult(sixWithTb, r)).toEqual({ ok: true, winner: 'B' });
+    expect(formatResult(r)).toBe('6-3 2-1 (abandono)');
+    expect(formatResult({ ...r, outcome: 'injury' })).toBe('6-3 2-1 (lesión)');
+  });
+
+  it('effectiveSets completa el partido a favor del ganador', () => {
+    const retired = (sets: { a: number; b: number }[], winner: 'A' | 'B') => ({
+      kind: 'sets' as const,
+      outcome: 'retired' as const,
+      sets,
+      winner,
+    });
+    // 6-3 2-1, abandona A → gana B: 6-3 1-6 0-6
+    expect(
+      effectiveSets(
+        sixWithTb,
+        retired(
+          [
+            { a: 6, b: 3 },
+            { a: 2, b: 1 },
+          ],
+          'B',
+        ),
+      ),
+    ).toEqual([
+      { a: 6, b: 3 },
+      { a: 2, b: 6 },
+      { a: 0, b: 6 },
+    ]);
+    // 6-3 2-1, abandona B → gana A: 6-3 6-1
+    expect(
+      effectiveSets(
+        sixWithTb,
+        retired(
+          [
+            { a: 6, b: 3 },
+            { a: 2, b: 1 },
+          ],
+          'A',
+        ),
+      ),
+    ).toEqual([
+      { a: 6, b: 3 },
+      { a: 6, b: 1 },
+    ]);
+    // 5-5 con tie-break → 7-5; sin tie-break → 7-5 también (ventaja)
+    expect(effectiveSets(sixWithTb, retired([{ a: 5, b: 5 }], 'A'))[0]).toEqual({ a: 7, b: 5 });
+    expect(effectiveSets(noTb, retired([{ a: 7, b: 7 }], 'B'))[0]).toEqual({ a: 7, b: 9 });
+    // super tie-break 8-9 → 11-9 para A
+    const st = effectiveSets(
+      superTb,
+      retired(
+        [
+          { a: 6, b: 3 },
+          { a: 3, b: 6 },
+          { a: 9, b: 8 },
+        ],
+        'B',
+      ),
+    );
+    expect(st[2]).toEqual({ a: 9, b: 11 });
+    // sin sets jugados: todo a favor del ganador
+    expect(effectiveSets(sixWithTb, retired([], 'A'))).toEqual([
+      { a: 6, b: 0 },
+      { a: 6, b: 0 },
+    ]);
+    // un partido normal queda igual
+    const normal = {
+      kind: 'sets' as const,
+      outcome: 'normal' as const,
+      sets: [{ a: 6, b: 1 }],
+      winner: 'A' as const,
+    };
+    expect(effectiveSets(sixWithTb, normal)).toEqual([{ a: 6, b: 1 }]);
   });
 });

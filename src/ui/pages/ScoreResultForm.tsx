@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { type Match, sideEntries } from '../../domain/match';
 import { lastRoundNumber } from '../../domain/rotationStandings';
-import { type Side, buildScoreResult } from '../../domain/scoring';
+import { type MatchResult, type Side, buildScoreResult, buildWalkover } from '../../domain/scoring';
+import { OutcomeChooser, SideChooser } from '../components/OutcomeInputs';
 import { Page } from '../components/Layout';
 import { Button, Card } from '../components/ui';
 import { entryName } from '../format';
@@ -26,6 +27,10 @@ export function ScoreResultForm({
   const [a, setA] = useState<number | null>(saved?.a ?? null);
   const [b, setB] = useState<number | null>(saved?.b ?? null);
   const [error, setError] = useState<string | null>(null);
+  const [walkover, setWalkover] = useState(saved?.outcome === 'walkover');
+  const [absent, setAbsent] = useState<Side | null>(
+    saved?.outcome === 'walkover' ? (saved.winner === 'A' ? 'B' : 'A') : null,
+  );
 
   const name = (side: Side) =>
     sideEntries(side === 'A' ? match.sideA : match.sideB)
@@ -36,8 +41,19 @@ export function ScoreResultForm({
     data.tournament.format.kind === 'mexicano' && lastRoundNumber(data.rounds) > match.round;
 
   const save = async (clear: boolean) => {
-    let result = null;
-    if (!clear) {
+    let result: MatchResult | null = null;
+    if (!clear && walkover) {
+      if (!absent) {
+        setError('Elegí quién no se presentó.');
+        return;
+      }
+      const built = buildWalkover(config, absent === 'A' ? 'B' : 'A');
+      if (!built.ok) {
+        setError(built.error);
+        return;
+      }
+      result = built.result;
+    } else if (!clear) {
       if (a === null || b === null) {
         setError('Completá el resultado.');
         return;
@@ -66,6 +82,28 @@ export function ScoreResultForm({
       </Card>
 
       {config.kind === 'points' && (
+        <OutcomeChooser
+          value={walkover ? 'walkover' : 'normal'}
+          options={['normal', 'walkover']}
+          onChange={(o) => {
+            setError(null);
+            setWalkover(o === 'walkover');
+          }}
+        />
+      )}
+      {walkover && (
+        <SideChooser
+          label="¿Quién no se presentó?"
+          nameA={name('A')}
+          nameB={name('B')}
+          value={absent}
+          onChange={(side) => {
+            setError(null);
+            setAbsent(side);
+          }}
+        />
+      )}
+      {config.kind === 'points' && !walkover && (
         <PointsInput
           target={config.target}
           nameA={name('A')}

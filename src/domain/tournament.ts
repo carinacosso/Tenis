@@ -12,7 +12,7 @@ export type AmericanoVariant = 'doubles' | 'singles' | 'mixed';
  * En los rotativos, `rounds = null` significa "rotación completa" (se calcula al generar).
  */
 export type FormatConfig =
-  | { kind: 'knockout' }
+  | { kind: 'knockout'; consolation?: boolean }
   | { kind: 'groups'; groupCount: number; qualifiersPerGroup: number }
   | { kind: 'league'; doubleRound: boolean }
   | { kind: 'americano'; variant: AmericanoVariant; rounds: number | null }

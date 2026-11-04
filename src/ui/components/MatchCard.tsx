@@ -15,7 +15,16 @@ export function MatchCard({
   href?: string;
 }) {
   const { match, a, b, state, winner } = resolved;
-  const sets = match.result?.kind === 'sets' ? match.result.sets : [];
+  const outcome = match.result?.outcome ?? 'normal';
+  const sets = match.result?.kind === 'sets' && outcome !== 'walkover' ? match.result.sets : [];
+  const outcomeNote =
+    outcome === 'walkover'
+      ? 'W.O.'
+      : outcome === 'retired'
+        ? 'Abandono'
+        : outcome === 'injury'
+          ? 'Lesión'
+          : null;
 
   const row = (side: 'A' | 'B') => {
     const id = side === 'A' ? a : b;
@@ -62,6 +71,11 @@ export function MatchCard({
       {row('A')}
       <div className="my-1 border-t border-neutral-200 dark:border-neutral-800" />
       {row('B')}
+      {outcomeNote && (
+        <p className="mt-1 text-sm font-bold text-red-700 uppercase dark:text-red-400">
+          {outcomeNote}
+        </p>
+      )}
       {match.result && <span className="sr-only">Resultado: {formatResult(match.result)}</span>}
     </>
   );

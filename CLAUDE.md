@@ -10,7 +10,7 @@
 | 2. Primer torneo (inscripción, eliminación directa, puntuación, resultados)    | ✅ Hecha  |
 | 3. Rotativos (Americano dobles/singles/mixto, Mexicano)                        | ✅ Hecha  |
 | 4. Grupos + playoffs, liga, desempates                                         | ✅ Hecha  |
-| 5. Canchas/horarios, W.O./abandonos, consolación                               | Pendiente |
+| 5. W.O./abandonos, consolación (canchas y horarios: descartado por el usuario) | ✅ Hecha  |
 | 6. Compartir imagen, PDF, Excel, backup, historial, estadísticas               | Pendiente |
 | 7. Instalación guiada, pulido, Lighthouse                                      | Pendiente |
 
@@ -61,6 +61,8 @@ Fase 3: `FormatConfig` suma `americano` (variantes doubles/singles/mixed) y `mex
 Archivos de dominio: `player.ts`, `settings.ts`, `tournament.ts`, `registration.ts` (inscripción, lista de espera, pagos, cabezas), `match.ts` (Match, Round, SideSource), `knockout.ts` (sorteo, resolución, cascada, podio), `rotation.ts` (Americano y Mexicano), `rotationStandings.ts` (ranking y avance de rondas), `scoring.ts` (configuración y validación de resultados), `random.ts` (rng con semilla).
 
 Fase 4: `FormatConfig` suma `groups` (`groupCount`, `qualifiersPerGroup`) y `league` (`doubleRound`); `Tournament.tiebreakOrder` (opcional, por defecto ganados → sets → games → directo); `Match.stage` (`group` | `playoff`) y `Match.groupId`; entidad `Group` (Dexie versión 4, tabla `groups`; la liga es un único grupo "Liga"). Dominio: `standings.ts` (tablas por sets con desempate configurable y mini tabla para el directo) y `groups.ts` (reparto en zigzag, fixture con el círculo, tablas por grupo y armado del cuadro final).
+
+Fase 5: `MatchResult.outcome` (`normal` | `walkover` | `retired` | `injury`; a puntos solo `normal` | `walkover`); `SetsResult.autoWalkoverFrom` marca los W.O. puestos por una lesión; formato `knockout` con `consolation?: boolean`; `Match.stage` suma `consolation`. Dominio: `scoring.ts` (`walkoverSets`, `buildWalkover`, `checkRetiredSets`, `effectiveSets`) y `consolation.ts` (quiénes entran y sorteo). Sin cambios de esquema Dexie.
 
 Algoritmo de rotación (`rotation.ts`): descansa primero quien menos descansó; en dobles con N múltiplo de 4 se alterna el método del círculo (compañeros sin repetir garantizado) con búsqueda local, y en el resto se usa búsqueda local con costo = 10·(compañeros repetidos)² + (rivales repetidos)². Se generan varias planificaciones completas y se elige la de menor costo. Singles usa el círculo (cada rival una vez). Mixto: parejas hombre+mujer, rotación de compañeras como punto de partida.
 
@@ -121,6 +123,14 @@ Decisiones de la fase 4:
 - Si se corrige un resultado de grupo y cambian los clasificados, el cuadro final se rearma; si ya tenía resultados, se pide confirmación antes de borrarlos.
 - Liga: solo ida o ida y vuelta (configurable). Termina al jugarse todos los partidos; podio = 3 primeros de la tabla.
 - Grupos y liga se juegan por sets; la modalidad (singles/dobles) es libre.
+
+Decisiones de la fase 5:
+
+- Canchas y horarios: descartado por el usuario (no se implementa).
+- W.O.: se guarda como 6-0 6-0 (10-0 si el set es super tie-break) para el ganador. A puntos: puntaje máximo contra 0. Por tiempo no hay W.O. (se carga el puntaje).
+- Abandono y lesión: se guardan los sets jugados (el último puede quedar a medias). En las tablas se completa el partido a favor del rival (6-3 2-1 abandona → 6-3 6-1).
+- Lesión en grupos o liga: el lesionado pierde por W.O. los partidos de esa fase que le quedaban (automático). Si después se corrige ese resultado, se sacan esos W.O. automáticos.
+- Consolación (opcional en eliminación directa): entran los que pierden su primer partido jugado (incluye a quien tuvo bye y perdió en 2.ª ronda). No entran los que lo perdieron por W.O. o lesión. Se sortea sola cuando todos jugaron su primer partido; si una corrección cambia quiénes entran, se vuelve a sortear (con confirmación si ya tenía resultados). El torneo termina cuando se juegan la final principal y la de consolación.
 
 ## Convenciones
 

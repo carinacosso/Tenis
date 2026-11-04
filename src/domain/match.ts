@@ -24,7 +24,7 @@ export interface Match extends EntityBase {
   groupId?: Id;
 }
 
-export type MatchStage = 'group' | 'playoff';
+export type MatchStage = 'group' | 'playoff' | 'consolation';
 
 /** Grupo de la fase de grupos (en la liga hay un único grupo). */
 export interface Group extends EntityBase {

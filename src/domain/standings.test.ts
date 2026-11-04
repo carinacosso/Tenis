@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Match } from './match';
 import type { SetScore } from './scoring';
+import { DEFAULT_SETS_SCORING } from './scoring';
 import { computeStandings, tallyResult } from './standings';
 import { DEFAULT_TIEBREAK_ORDER, type TiebreakCriterion } from './tournament';
 
@@ -210,5 +211,42 @@ describe('computeStandings', () => {
     const run = () => ids(computeStandings(['a', 'b', 'c'], [], DEFAULT_TIEBREAK_ORDER, 'torneo'));
     expect(run()).toEqual(run());
     expect(run().sort()).toEqual(['a', 'b', 'c']);
+  });
+});
+
+describe('W.O. y abandono en la tabla', () => {
+  it('el W.O. cuenta 6-0 6-0 y el abandono se completa a favor del ganador', () => {
+    const scoring = DEFAULT_SETS_SCORING;
+    const wo: Match = {
+      ...played('a', 'b', [
+        [6, 0],
+        [6, 0],
+      ]),
+      result: {
+        kind: 'sets',
+        outcome: 'walkover',
+        sets: [
+          { a: 6, b: 0 },
+          { a: 6, b: 0 },
+        ],
+        winner: 'A',
+      },
+    };
+    const ret: Match = {
+      ...played('c', 'a', [[6, 3]]),
+      result: {
+        kind: 'sets',
+        outcome: 'retired',
+        sets: [
+          { a: 6, b: 3 },
+          { a: 2, b: 1 },
+        ],
+        winner: 'B',
+      },
+    };
+    const rows = computeStandings(['a', 'b', 'c'], [wo, ret], DEFAULT_TIEBREAK_ORDER, 's', scoring);
+    const a = rows.find((r) => r.entryId === 'a');
+    // a: W.O. 6-0 6-0 + vs c: 3-6 6-2 6-0 (completado) → sets 4-1, games 12+15=27 vs 0+8=8
+    expect(a).toMatchObject({ won: 2, setsFor: 4, setsAgainst: 1, gamesFor: 27, gamesAgainst: 8 });
   });
 });

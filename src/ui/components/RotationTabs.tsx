@@ -94,6 +94,9 @@ function RotationMatchCard({
       {row('A')}
       <div className="my-1 border-t border-neutral-200 dark:border-neutral-800" />
       {row('B')}
+      {match.result?.outcome === 'walkover' && (
+        <p className="mt-1 text-sm font-bold text-red-700 uppercase dark:text-red-400">W.O.</p>
+      )}
     </Link>
   );
 }

@@ -149,7 +149,7 @@ export function computeGroupTables(
   matches: readonly Match[],
 ): GroupTable[] {
   const order = tiebreakOrderOf(tournament);
-  const superIndex = superTiebreakIndex(tournament);
+  const scoring = tournament.scoring.kind === 'sets' ? tournament.scoring : null;
   return [...groups]
     .sort((a, b) => a.index - b.index)
     .map((g) => ({
@@ -159,7 +159,7 @@ export function computeGroupTables(
         matches.filter((m) => m.stage === 'group' && m.groupId === g.id),
         order,
         tournament.id,
-        superIndex,
+        scoring,
       ),
     }));
 }

@@ -298,6 +298,20 @@ export function TournamentFormPage() {
           </fieldset>
         )}
 
+        {draft.format.kind === 'knockout' && (
+          <fieldset disabled={isLocked('format')} className="disabled:opacity-60">
+            <ChoiceGroup
+              label="Cuadro de consolación"
+              options={yesNo}
+              value={draft.format.consolation ? 'yes' : 'no'}
+              onChange={(v) => set('format', { kind: 'knockout', consolation: v === 'yes' })}
+            />
+            <p className="mt-1 text-neutral-700 dark:text-neutral-300">
+              Para los que pierden su primer partido.
+            </p>
+          </fieldset>
+        )}
+
         {draft.format.kind === 'groups' && (
           <fieldset
             disabled={isLocked('format')}

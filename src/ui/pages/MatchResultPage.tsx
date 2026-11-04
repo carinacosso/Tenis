@@ -4,14 +4,18 @@ import { resolveKnockout } from '../../domain/knockout';
 import {
   type QuickSetScore,
   type SetScore,
+  type MatchResult,
+  type ResultOutcome,
   type SetsScoring,
   type Side,
+  buildWalkover,
   buildSetsResult,
   isSuperTiebreakSet,
   quickSetScores,
   setsToWin,
 } from '../../domain/scoring';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { OutcomeChooser, PartialSetsEditor, SideChooser } from '../components/OutcomeInputs';
 import { isRotation } from '../../domain/tournament';
 import { Page } from '../components/Layout';
 import { Button, Card } from '../components/ui';
@@ -75,6 +79,9 @@ export function MatchResultPage() {
   const [inputs, setInputs] = useState<SetInput[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<{ cleared: string[]; clear: boolean } | null>(null);
+  const [outcomeChoice, setOutcomeChoice] = useState<ResultOutcome | null>(null);
+  const [absentChoice, setAbsentChoice] = useState<Side | null>(null);
+  const [partialChoice, setPartialChoice] = useState<SetScore[] | null>(null);
   const back = `/torneos/${id}?tab=partidos`;
 
   const resolved = useMemo(
@@ -121,8 +128,18 @@ export function MatchResultPage() {
   const nameB = entryName(state.entriesById.get(target.b ?? ''), state.players);
   const nameOf = (side: Side) => (side === 'A' ? nameA : nameB);
 
-  const saved =
-    target.match.result?.kind === 'sets' ? target.match.result.sets.map(fromSetScore) : [];
+  const savedResult = target.match.result?.kind === 'sets' ? target.match.result : null;
+  const savedOutcome = savedResult?.outcome ?? 'normal';
+  const outcome: ResultOutcome = outcomeChoice ?? savedOutcome;
+  const absent: Side | null =
+    absentChoice ??
+    (savedResult && savedOutcome !== 'normal' ? (savedResult.winner === 'A' ? 'B' : 'A') : null);
+  const partial: SetScore[] =
+    partialChoice ??
+    (savedResult && (savedOutcome === 'retired' || savedOutcome === 'injury')
+      ? savedResult.sets
+      : []);
+  const saved = savedResult && savedOutcome === 'normal' ? savedResult.sets.map(fromSetScore) : [];
   const current = inputs ?? saved;
   const count = visibleSets(current, config);
 
@@ -136,8 +153,24 @@ export function MatchResultPage() {
   };
 
   const submit = async (confirmed: boolean, clear = false) => {
-    let result = null;
-    if (!clear) {
+    let result: MatchResult | null = null;
+    if (!clear && outcome !== 'normal') {
+      if (!absent) {
+        setError(outcome === 'walkover' ? 'Elegí quién no se presentó.' : 'Elegí quién abandonó.');
+        return;
+      }
+      const winner: Side = absent === 'A' ? 'B' : 'A';
+      if (outcome === 'walkover') {
+        const built = buildWalkover(config, winner);
+        if (!built.ok) {
+          setError(built.error);
+          return;
+        }
+        result = built.result;
+      } else {
+        result = { kind: 'sets', outcome, sets: partial, winner };
+      }
+    } else if (!clear) {
       const sets = Array.from({ length: count }, (_, i) =>
         toSetScore(current[i] ?? EMPTY_SET, config),
       );
@@ -155,10 +188,10 @@ export function MatchResultPage() {
       }
       result = built.result;
     }
-    const outcome = await tournaments.recordResult(matchId, result, confirmed);
-    if (outcome.status === 'invalid') setError(outcome.error);
-    else if (outcome.status === 'needsConfirmation')
-      setPending({ cleared: outcome.cleared, clear });
+    const response = await tournaments.recordResult(matchId, result, confirmed);
+    if (response.status === 'invalid') setError(response.error);
+    else if (response.status === 'needsConfirmation')
+      setPending({ cleared: response.cleared, clear });
     else navigate(back, { replace: true });
   };
 
@@ -179,72 +212,117 @@ export function MatchResultPage() {
         <p className="text-xl font-bold">{nameB}</p>
       </Card>
 
-      {Array.from({ length: count }, (_, index) => {
-        const input = current[index] ?? EMPTY_SET;
-        const superTb = isSuperTiebreakSet(config, index);
-        return (
-          <section
-            key={index}
-            aria-label={`Set ${index + 1}`}
-            className="flex flex-col gap-3 rounded-2xl border-2 border-neutral-200 p-4 dark:border-neutral-800"
-          >
-            <h2 className="text-xl font-bold">
-              {superTb ? 'Super tie-break' : `Set ${index + 1}`}
-            </h2>
-            <p className="font-semibold">¿Quién ganó?</p>
-            <div className="grid grid-cols-2 gap-2">
-              {(['A', 'B'] as const).map((side) => (
-                <button
-                  key={side}
-                  type="button"
-                  aria-pressed={input.winner === side}
-                  onClick={() => update(index, { winner: side })}
-                  className={`min-h-14 rounded-xl border-2 px-2 text-lg font-semibold ${
-                    input.winner === side
-                      ? 'border-brand-800 bg-brand-800 text-white dark:border-brand-700 dark:bg-brand-700'
-                      : 'border-neutral-400 dark:border-neutral-600'
-                  }`}
-                >
-                  {nameOf(side)}
-                </button>
-              ))}
-            </div>
-            {input.winner && (
-              <>
-                <p className="font-semibold">Resultado del set</p>
-                <div className="grid grid-cols-4 gap-2">
-                  {quickSetScores(config, index).map((s) => {
-                    const selected =
-                      input.score?.winner === s.winner && input.score.loser === s.loser;
-                    return (
-                      <button
-                        key={`${s.winner}-${s.loser}`}
-                        type="button"
-                        aria-pressed={selected}
-                        onClick={() => update(index, { score: s, tiebreakLoser: null })}
-                        className={`min-h-14 rounded-xl border-2 text-xl font-bold tabular-nums ${
-                          selected
-                            ? 'border-brand-800 bg-brand-800 text-white dark:border-brand-700 dark:bg-brand-700'
-                            : 'border-neutral-400 dark:border-neutral-600'
-                        }`}
-                      >
-                        {s.winner}-{s.loser}
-                      </button>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-            {input.score?.tiebreak && (
-              <TiebreakInput
-                points={config.tiebreak.points}
-                value={input.tiebreakLoser}
-                onChange={(v) => update(index, { tiebreakLoser: v })}
-              />
-            )}
-          </section>
-        );
-      })}
+      <OutcomeChooser
+        value={outcome}
+        onChange={(o) => {
+          setError(null);
+          setOutcomeChoice(o);
+        }}
+      />
+
+      {outcome !== 'normal' && (
+        <SideChooser
+          label={outcome === 'walkover' ? '¿Quién no se presentó?' : '¿Quién abandonó?'}
+          nameA={nameA}
+          nameB={nameB}
+          value={absent}
+          onChange={(side) => {
+            setError(null);
+            setAbsentChoice(side);
+          }}
+        />
+      )}
+      {(outcome === 'retired' || outcome === 'injury') && (
+        <PartialSetsEditor
+          sets={partial}
+          nameA={nameA}
+          nameB={nameB}
+          onChange={(sets) => {
+            setError(null);
+            setPartialChoice(sets);
+          }}
+        />
+      )}
+      {outcome === 'injury' && target.match.stage === 'group' && (
+        <p className="rounded-xl bg-amber-100 p-3 font-medium text-amber-950">
+          Por la lesión, pierde por W.O. los partidos que le quedan en la fase.
+        </p>
+      )}
+      {outcome !== 'normal' && (
+        <p className="text-neutral-700 dark:text-neutral-300">
+          {outcome === 'walkover'
+            ? 'En la tabla cuenta como 6-0 6-0 para el ganador.'
+            : 'En la tabla se completa el partido a favor del rival.'}
+        </p>
+      )}
+
+      {outcome === 'normal' &&
+        Array.from({ length: count }, (_, index) => {
+          const input = current[index] ?? EMPTY_SET;
+          const superTb = isSuperTiebreakSet(config, index);
+          return (
+            <section
+              key={index}
+              aria-label={`Set ${index + 1}`}
+              className="flex flex-col gap-3 rounded-2xl border-2 border-neutral-200 p-4 dark:border-neutral-800"
+            >
+              <h2 className="text-xl font-bold">
+                {superTb ? 'Super tie-break' : `Set ${index + 1}`}
+              </h2>
+              <p className="font-semibold">¿Quién ganó?</p>
+              <div className="grid grid-cols-2 gap-2">
+                {(['A', 'B'] as const).map((side) => (
+                  <button
+                    key={side}
+                    type="button"
+                    aria-pressed={input.winner === side}
+                    onClick={() => update(index, { winner: side })}
+                    className={`min-h-14 rounded-xl border-2 px-2 text-lg font-semibold ${
+                      input.winner === side
+                        ? 'border-brand-800 bg-brand-800 text-white dark:border-brand-700 dark:bg-brand-700'
+                        : 'border-neutral-400 dark:border-neutral-600'
+                    }`}
+                  >
+                    {nameOf(side)}
+                  </button>
+                ))}
+              </div>
+              {input.winner && (
+                <>
+                  <p className="font-semibold">Resultado del set</p>
+                  <div className="grid grid-cols-4 gap-2">
+                    {quickSetScores(config, index).map((s) => {
+                      const selected =
+                        input.score?.winner === s.winner && input.score.loser === s.loser;
+                      return (
+                        <button
+                          key={`${s.winner}-${s.loser}`}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() => update(index, { score: s, tiebreakLoser: null })}
+                          className={`min-h-14 rounded-xl border-2 text-xl font-bold tabular-nums ${
+                            selected
+                              ? 'border-brand-800 bg-brand-800 text-white dark:border-brand-700 dark:bg-brand-700'
+                              : 'border-neutral-400 dark:border-neutral-600'
+                          }`}
+                        >
+                          {s.winner}-{s.loser}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+              {input.score?.tiebreak && (
+                <TiebreakInput
+                  points={config.tiebreak.points}
+                  value={input.tiebreakLoser}
+                  onChange={(v) => update(index, { tiebreakLoser: v })}
+                />
+              )}
+            </section>
+          );
+        })}
 
       {error && (
         <p role="alert" className="rounded-xl bg-red-100 p-3 font-semibold text-red-900">

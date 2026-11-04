@@ -1,7 +1,7 @@
 import type { Id } from './common';
 import { type Match, sideEntries } from './match';
 import { stableLottery } from './rotationStandings';
-import type { MatchResult } from './scoring';
+import { type MatchResult, type SetsScoring, effectiveSets, isSuperTiebreakSet } from './scoring';
 import type { TiebreakCriterion } from './tournament';
 
 /** Fila de la tabla de posiciones de un grupo o liga (partidos por sets). */
@@ -30,10 +30,16 @@ interface Tally {
  * Sets y games de un resultado. El super tie-break cuenta como set y como un game (1-0)
  * para el que lo ganó, para no inflar la diferencia de games con sus puntos.
  */
-export function tallyResult(result: MatchResult, superTiebreakIndex: number | null): Tally {
+export function tallyResult(
+  result: MatchResult,
+  superTiebreakIndex: number | null,
+  scoring: SetsScoring | null = null,
+): Tally {
   const t: Tally = { setsA: 0, setsB: 0, gamesA: 0, gamesB: 0 };
   if (result.kind !== 'sets') return t;
-  result.sets.forEach((s, i) => {
+  // Abandonos y lesiones: se completa el partido a favor del ganador.
+  const sets = scoring ? effectiveSets(scoring, result) : result.sets;
+  sets.forEach((s, i) => {
     if (s.a > s.b) t.setsA++;
     else t.setsB++;
     if (i === superTiebreakIndex) {
@@ -67,8 +73,10 @@ function emptyRow(entryId: Id): StandingRow {
 function accumulate(
   entryIds: readonly Id[],
   matches: readonly Match[],
-  superTiebreakIndex: number | null,
+  scoring: SetsScoring | null,
 ): Map<Id, StandingRow> {
+  const superTiebreakIndex =
+    scoring && isSuperTiebreakSet(scoring, scoring.bestOf - 1) ? scoring.bestOf - 1 : null;
   const rows = new Map(entryIds.map((id) => [id, emptyRow(id)]));
   for (const match of matches) {
     if (!match.result) continue;
@@ -77,7 +85,7 @@ function accumulate(
     const rowA = a === undefined ? undefined : rows.get(a);
     const rowB = b === undefined ? undefined : rows.get(b);
     if (!rowA || !rowB) continue;
-    const t = tallyResult(match.result, superTiebreakIndex);
+    const t = tallyResult(match.result, superTiebreakIndex, scoring);
     const winnerIsA = match.result.winner === 'A';
     for (const [row, own, other, won] of [
       [rowA, t, { setsA: t.setsB, setsB: t.setsA, gamesA: t.gamesB, gamesB: t.gamesA }, winnerIsA],
@@ -110,9 +118,9 @@ export function computeStandings(
   matches: readonly Match[],
   order: readonly TiebreakCriterion[],
   lotterySeed: string,
-  superTiebreakIndex: number | null = null,
+  scoring: SetsScoring | null = null,
 ): StandingRow[] {
-  const rows = accumulate(entryIds, matches, superTiebreakIndex);
+  const rows = accumulate(entryIds, matches, scoring);
   const value = (criterion: TiebreakCriterion, id: Id, tied: readonly Id[]): number => {
     const row = rows.get(id);
     if (!row) return 0;
@@ -128,7 +136,7 @@ export function computeStandings(
           const ids = [...sideEntries(m.sideA), ...sideEntries(m.sideB)];
           return ids.every((x) => tied.includes(x));
         });
-        return accumulate(tied, between, superTiebreakIndex).get(id)?.won ?? 0;
+        return accumulate(tied, between, scoring).get(id)?.won ?? 0;
       }
     }
   };

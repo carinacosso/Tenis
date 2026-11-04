@@ -51,16 +51,34 @@ export interface SetScore {
   tiebreak?: { a: number; b: number };
 }
 
+/**
+ * Cómo terminó el partido:
+ * - normal: se jugó completo.
+ * - walkover: W.O. (el perdedor no se presentó). Se guarda como sets G-0 (6-0 6-0).
+ * - retired: abandono durante el partido. Se guardan los sets jugados (el último puede estar incompleto).
+ * - injury: retiro por lesión. Igual que el abandono; en grupos/liga pierde por W.O. lo que le quedaba.
+ */
+export type ResultOutcome = 'normal' | 'walkover' | 'retired' | 'injury';
+
+export const OUTCOME_LABELS: Record<ResultOutcome, string> = {
+  normal: 'Normal',
+  walkover: 'W.O.',
+  retired: 'Abandono',
+  injury: 'Lesión',
+};
+
 export interface SetsResult {
   kind: 'sets';
-  outcome: 'normal';
+  outcome: ResultOutcome;
   sets: SetScore[];
   winner: Side;
+  /** W.O. puesto automáticamente por el retiro por lesión registrado en ese partido. */
+  autoWalkoverFrom?: string;
 }
 
 export interface PointsResult {
   kind: 'points';
-  outcome: 'normal';
+  outcome: 'normal' | 'walkover';
   a: number;
   b: number;
   winner: Side;
@@ -185,17 +203,129 @@ export type TimeCheck = { ok: true; winner: Side | null } | { ok: false; error: 
 /** Valida un resultado contra la configuración del torneo. */
 export function checkResult(config: ScoringConfig, result: MatchResult): TimeCheck {
   let check: TimeCheck;
-  if (config.kind === 'sets' && result.kind === 'sets')
-    check = checkSetsResult(config, result.sets);
-  else if (config.kind === 'points' && result.kind === 'points')
+  if (config.kind === 'sets' && result.kind === 'sets') {
+    if (result.outcome === 'walkover') {
+      check =
+        JSON.stringify(result.sets) === JSON.stringify(walkoverSets(config, result.winner))
+          ? { ok: true, winner: result.winner }
+          : { ok: false, error: 'El W.O. tiene que cargarse como W.O.' };
+    } else if (result.outcome === 'retired' || result.outcome === 'injury') {
+      const error = checkRetiredSets(config, result.sets);
+      check = error ? { ok: false, error } : { ok: true, winner: result.winner };
+    } else {
+      check = checkSetsResult(config, result.sets);
+    }
+  } else if (config.kind === 'points' && result.kind === 'points') {
     check = checkPointsResult(config, result.a, result.b);
-  else if (config.kind === 'time' && result.kind === 'time')
+    if (check.ok && result.outcome === 'walkover' && Math.min(result.a, result.b) !== 0)
+      check = { ok: false, error: 'En un W.O. el que no se presentó suma 0.' };
+  } else if (config.kind === 'time' && result.kind === 'time')
     check = checkTimeResult(result.a, result.b);
   else return { ok: false, error: 'El tipo de resultado no corresponde al torneo.' };
   if (check.ok && check.winner !== result.winner) {
     return { ok: false, error: 'El ganador no coincide con el resultado.' };
   }
   return check;
+}
+
+/** Sets de un W.O.: el ganador gana los sets necesarios G-0 (6-0 6-0, o 10-0 en el super tie-break). */
+export function walkoverSets(config: SetsScoring, winner: Side): SetScore[] {
+  return Array.from({ length: setsToWin(config.bestOf) }, (_, i) => {
+    const games = isSuperTiebreakSet(config, i) ? SUPER_TIEBREAK_POINTS : config.gamesPerSet;
+    return winner === 'A' ? { a: games, b: 0 } : { a: 0, b: games };
+  });
+}
+
+/** Arma un W.O. para cualquier puntuación (en partidos por tiempo no hay W.O.). */
+export function buildWalkover(
+  config: ScoringConfig,
+  winner: Side,
+): { ok: true; result: SetsResult | PointsResult } | { ok: false; error: string } {
+  if (config.kind === 'sets')
+    return {
+      ok: true,
+      result: { kind: 'sets', outcome: 'walkover', sets: walkoverSets(config, winner), winner },
+    };
+  if (config.kind === 'points') {
+    const [a, b] = winner === 'A' ? [config.target, 0] : [0, config.target];
+    return { ok: true, result: { kind: 'points', outcome: 'walkover', a, b, winner } };
+  }
+  return { ok: false, error: 'En los partidos por tiempo cargá el puntaje.' };
+}
+
+/** Un set que todavía se puede seguir jugando (sin ganador definido). */
+function isOpenSet(config: SetsScoring, set: SetScore, index: number): boolean {
+  const { a, b } = set;
+  if (!isCount(a) || !isCount(b) || set.tiebreak) return false;
+  if (isSuperTiebreakSet(config, index)) {
+    const w = Math.max(a, b);
+    const l = Math.min(a, b);
+    return w < SUPER_TIEBREAK_POINTS || w - l < 2;
+  }
+  const g = config.gamesPerSet;
+  if (config.tiebreak.enabled)
+    return a <= g && b <= g && !(Math.max(a, b) === g && Math.abs(a - b) >= 2);
+  return Math.max(a, b) < g || Math.abs(a - b) < 2;
+}
+
+/**
+ * Valida los sets de un abandono: los completos tienen que ser válidos, el último puede quedar
+ * a medias, y nadie puede haber ganado ya el partido. Puede no haber sets (abandonó antes de empezar).
+ */
+export function checkRetiredSets(config: SetsScoring, sets: readonly SetScore[]): string | null {
+  const needed = setsToWin(config.bestOf);
+  let wonA = 0;
+  let wonB = 0;
+  for (const [index, set] of sets.entries()) {
+    if (wonA === needed || wonB === needed)
+      return 'El partido ya estaba definido antes del abandono.';
+    const last = index === sets.length - 1;
+    if (last && isOpenSet(config, set, index)) return null;
+    const error = checkSet(config, set, index);
+    if (error) return error;
+    if (set.a > set.b) wonA++;
+    else wonB++;
+  }
+  if (wonA === needed || wonB === needed)
+    return 'El partido ya estaba definido antes del abandono.';
+  return null;
+}
+
+/**
+ * Sets "completados" de un abandono, para las tablas: el ganador se lleva el set en juego
+ * y los que faltaban (ej. 6-3 2-1 → 6-3 6-1). En un W.O. o un partido normal, los sets tal cual.
+ */
+export function effectiveSets(config: SetsScoring, result: SetsResult): SetScore[] {
+  if (result.outcome !== 'retired' && result.outcome !== 'injury') return result.sets;
+  const winnerA = result.winner === 'A';
+  const sets: SetScore[] = [];
+  let wonW = 0;
+  const needed = setsToWin(config.bestOf);
+  result.sets.forEach((set, index) => {
+    if (isOpenSet(config, set, index)) {
+      const target = isSuperTiebreakSet(config, index) ? SUPER_TIEBREAK_POINTS : config.gamesPerSet;
+      const loser = winnerA ? set.b : set.a;
+      const winnerGames = isSuperTiebreakSet(config, index)
+        ? Math.max(target, loser + 2)
+        : loser >= target - 1
+          ? config.tiebreak.enabled
+            ? target + 1
+            : loser + 2
+          : target;
+      sets.push(winnerA ? { a: winnerGames, b: loser } : { a: loser, b: winnerGames });
+      wonW++;
+    } else {
+      sets.push(set);
+      if (set.a > set.b === winnerA) wonW++;
+    }
+  });
+  while (wonW < needed) {
+    const index = sets.length;
+    const games = isSuperTiebreakSet(config, index) ? SUPER_TIEBREAK_POINTS : config.gamesPerSet;
+    sets.push(winnerA ? { a: games, b: 0 } : { a: 0, b: games });
+    wonW++;
+  }
+  return sets;
 }
 
 /** Arma un resultado a puntos o por tiempo, validado. */
@@ -267,8 +397,16 @@ export function quickSetScores(config: SetsScoring, index: number): QuickSetScor
 
 /** Formatea el resultado desde el lado A: "6-3 7-6(5)". */
 export function formatResult(result: MatchResult): string {
+  if (result.outcome === 'walkover') return 'W.O.';
+  const suffix =
+    result.outcome === 'retired' ? ' (abandono)' : result.outcome === 'injury' ? ' (lesión)' : '';
   if (result.kind !== 'sets') return `${result.a}-${result.b}`;
-  return result.sets
+  if (suffix) return `${formatSetList(result.sets)}${suffix}`.trim();
+  return formatSetList(result.sets);
+}
+
+function formatSetList(sets: readonly SetScore[]): string {
+  return sets
     .map((s) => {
       const tb = s.tiebreak ? `(${Math.min(s.tiebreak.a, s.tiebreak.b)})` : '';
       return `${s.a}-${s.b}${tb}`;
@@ -278,7 +416,7 @@ export function formatResult(result: MatchResult): string {
 
 /** Formatea el resultado desde el punto de vista del ganador: "6-3 6-7(5) 10-8". */
 export function formatResultForWinner(result: MatchResult): string {
-  if (result.winner !== 'B') return formatResult(result);
+  if (result.winner !== 'B' || result.outcome === 'walkover') return formatResult(result);
   if (result.kind !== 'sets') return `${result.b}-${result.a}`;
   return formatResult({
     ...result,
