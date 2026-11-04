@@ -125,16 +125,33 @@ export function generateKnockout(
   }
 
   // 4. Partidos
+  const filled = slots.map((slot) => {
+    if (!slot) throw new Error('Error interno al armar la primera ronda.');
+    return slot;
+  });
+  return buildBracket(filled, newId);
+}
+
+/**
+ * Arma los partidos de un cuadro a partir de las posiciones de la primera ronda
+ * (de arriba hacia abajo). Las rondas siguientes toman al ganador de cada par de partidos.
+ */
+export function buildBracket(
+  slots: readonly SideSource[],
+  newId: () => Id,
+  stage?: MatchPlan['stage'],
+): MatchPlan[] {
+  const extra = stage ? { stage } : {};
   const plans: MatchPlan[] = [];
   let previous: MatchPlan[] = [];
-  for (let i = 0; i < size / 2; i++) {
+  for (let i = 0; i < slots.length / 2; i++) {
     const sideA = slots[2 * i];
     const sideB = slots[2 * i + 1];
     if (!sideA || !sideB) throw new Error('Error interno al armar la primera ronda.');
-    previous.push({ id: newId(), round: 1, position: i, sideA, sideB });
+    previous.push({ id: newId(), round: 1, position: i, sideA, sideB, ...extra });
   }
   plans.push(...previous);
-  for (let round = 2; round <= roundCount(size); round++) {
+  for (let round = 2; round <= roundCount(slots.length); round++) {
     const current: MatchPlan[] = [];
     for (let i = 0; i < previous.length / 2; i++) {
       const top = previous[2 * i];
@@ -146,12 +163,18 @@ export function generateKnockout(
         position: i,
         sideA: { kind: 'winnerOf', matchId: top.id },
         sideB: { kind: 'winnerOf', matchId: bottom.id },
+        ...extra,
       });
     }
     plans.push(...current);
     previous = current;
   }
   return plans;
+}
+
+/** Ronda en la que se cruzarían dos posiciones del cuadro (1 = primera ronda). */
+export function meetingRound(a: number, b: number): number {
+  return Math.floor(Math.log2(a ^ b)) + 1;
 }
 
 export type MatchState = 'waiting' | 'ready' | 'finished' | 'bye';

@@ -17,11 +17,16 @@ import {
   type TournamentDraft,
   type TournamentField,
   formatChoice,
+  DEFAULT_TIEBREAK_ORDER,
+  TIEBREAK_LABELS,
+  type TiebreakCriterion,
   formatFromChoice,
+  hasStandings,
   isRotation,
 } from '../../domain/tournament';
+import { ArrowDownIcon, ArrowUpIcon } from '../components/Icons';
 import { Page } from '../components/Layout';
-import { Button, Card, ChoiceGroup, TextField } from '../components/ui';
+import { Button, Card, ChoiceGroup, IconButton, TextField } from '../components/ui';
 import { todayIso } from '../format';
 import { useSettings } from '../hooks/useData';
 import { useServices } from '../ServicesContext';
@@ -37,16 +42,30 @@ function emptyDraft(): TournamentDraft {
     scoring: DEFAULT_SETS_SCORING,
     maxEntries: 16,
     entryFee: 0,
+    tiebreakOrder: [...DEFAULT_TIEBREAK_ORDER],
   };
 }
 
 function toDraft(t: Tournament): TournamentDraft {
   const { name, date, venue, category, modality, format, scoring, maxEntries, entryFee } = t;
-  return { name, date, venue, category, modality, format, scoring, maxEntries, entryFee };
+  return {
+    name,
+    date,
+    venue,
+    category,
+    modality,
+    format,
+    scoring,
+    maxEntries,
+    entryFee,
+    tiebreakOrder: t.tiebreakOrder ?? [...DEFAULT_TIEBREAK_ORDER],
+  };
 }
 
 const FORMAT_HELP: Record<FormatChoice, string> = {
   knockout: 'Cuadro: el que pierde queda afuera.',
+  groups: 'Primero grupos todos contra todos; los mejores de cada grupo pasan a un cuadro final.',
+  league: 'Todos contra todos; gana el primero de la tabla.',
   americano_doubles: 'Parejas que cambian cada ronda; cada uno suma los puntos de su pareja.',
   americano_singles: 'Todos contra todos, suma de puntos individual.',
   americano_mixed: 'Como el Americano dobles, con parejas siempre hombre + mujer.',
@@ -75,6 +94,7 @@ export function TournamentFormPage() {
   const [roundsText, setRoundsText] = useState('');
   const [customTarget, setCustomTarget] = useState('');
   const [minutesText, setMinutesText] = useState('15');
+  const [groupCountText, setGroupCountText] = useState('2');
 
   useEffect(() => {
     if (id === undefined) return;
@@ -89,6 +109,7 @@ export function TournamentFormPage() {
       if (scoring.kind === 'points' && !POINT_TARGETS.some((p) => p === scoring.target))
         setCustomTarget(String(scoring.target));
       if (t.scoring.kind === 'time') setMinutesText(String(t.scoring.minutes));
+      if (t.format.kind === 'groups') setGroupCountText(String(t.format.groupCount));
       setLocked(t.drawGeneratedAt !== null);
       setLoaded(true);
     });
@@ -108,6 +129,7 @@ export function TournamentFormPage() {
   const chooseFormat = (next: FormatChoice) => {
     const nextFormat = formatFromChoice(next, null);
     setRoundsText('');
+    setGroupCountText('2');
     setDraft((d) => {
       const nextRotation = isRotation(nextFormat);
       // Al cambiar entre familias de formatos, se pasa a una puntuación compatible.
@@ -142,6 +164,7 @@ export function TournamentFormPage() {
     if (isRotation(format)) {
       format = { ...format, rounds: roundsText.trim() === '' ? null : toNumber(roundsText) };
     }
+    if (format.kind === 'groups') format = { ...format, groupCount: toNumber(groupCountText) };
     let scoring = draft.scoring;
     if (rotation && pointsMode === 'custom')
       scoring = { kind: 'points', target: toNumber(customTarget) };
@@ -273,6 +296,70 @@ export function TournamentFormPage() {
               }}
             />
           </fieldset>
+        )}
+
+        {draft.format.kind === 'groups' && (
+          <fieldset
+            disabled={isLocked('format')}
+            className="flex flex-col gap-4 disabled:opacity-60"
+          >
+            <TextField
+              label="Cantidad de grupos"
+              type="number"
+              inputMode="numeric"
+              min={2}
+              value={groupCountText}
+              error={errors.format}
+              onChange={(e) => {
+                setGroupCountText(e.target.value);
+                setErrors((x) => ({ ...x, format: undefined }));
+              }}
+            />
+            <ChoiceGroup
+              label="Clasifican por grupo"
+              options={['1', '2', '3', '4'].map((v) => ({ value: v, label: v }))}
+              value={String(draft.format.qualifiersPerGroup)}
+              onChange={(v) =>
+                draft.format.kind === 'groups' &&
+                set('format', { ...draft.format, qualifiersPerGroup: Number(v) })
+              }
+            />
+          </fieldset>
+        )}
+
+        {draft.format.kind === 'league' && (
+          <fieldset disabled={isLocked('format')} className="disabled:opacity-60">
+            <ChoiceGroup
+              label="Partidos entre cada par"
+              options={[
+                { value: 'single', label: 'Solo ida' },
+                { value: 'double', label: 'Ida y vuelta' },
+              ]}
+              value={draft.format.doubleRound ? 'double' : 'single'}
+              onChange={(v) => set('format', { kind: 'league', doubleRound: v === 'double' })}
+            />
+          </fieldset>
+        )}
+
+        {hasStandings(draft.format) && (
+          <Card>
+            <fieldset
+              disabled={isLocked('tiebreakOrder')}
+              className="flex flex-col gap-2 disabled:opacity-60"
+            >
+              <legend className="text-xl font-bold">Desempate de la tabla</legend>
+              <p className="text-neutral-700 dark:text-neutral-300">
+                Se aplica en este orden; si siguen empatados, sorteo.
+              </p>
+              <TiebreakEditor
+                order={draft.tiebreakOrder ?? [...DEFAULT_TIEBREAK_ORDER]}
+                onChange={(order) => set('tiebreakOrder', order)}
+              />
+              {errors.tiebreakOrder && (
+                <p className="font-medium text-red-700 dark:text-red-400">{errors.tiebreakOrder}</p>
+              )}
+            </fieldset>
+          </Card>
         )}
 
         <Card>
@@ -419,5 +506,50 @@ export function TournamentFormPage() {
         <Button type="submit">{editing ? 'Guardar cambios' : 'Crear torneo'}</Button>
       </form>
     </Page>
+  );
+}
+
+function TiebreakEditor({
+  order,
+  onChange,
+}: {
+  order: TiebreakCriterion[];
+  onChange: (order: TiebreakCriterion[]) => void;
+}) {
+  const move = (index: number, delta: -1 | 1) => {
+    const next = [...order];
+    const a = next[index];
+    const b = next[index + delta];
+    if (a === undefined || b === undefined) return;
+    next[index] = b;
+    next[index + delta] = a;
+    onChange(next);
+  };
+  return (
+    <ol className="flex flex-col gap-1" aria-label="Orden de desempate">
+      {order.map((criterion, i) => (
+        <li
+          key={criterion}
+          className="flex min-h-12 items-center gap-1 rounded-xl bg-neutral-100 pl-4 dark:bg-neutral-800"
+        >
+          <span className="w-6 font-bold">{i + 1}.</span>
+          <span className="flex-1 text-lg font-semibold">{TIEBREAK_LABELS[criterion]}</span>
+          <IconButton
+            label={`Subir ${TIEBREAK_LABELS[criterion]}`}
+            disabled={i === 0}
+            onClick={() => move(i, -1)}
+          >
+            <ArrowUpIcon />
+          </IconButton>
+          <IconButton
+            label={`Bajar ${TIEBREAK_LABELS[criterion]}`}
+            disabled={i === order.length - 1}
+            onClick={() => move(i, 1)}
+          >
+            <ArrowDownIcon />
+          </IconButton>
+        </li>
+      ))}
+    </ol>
   );
 }

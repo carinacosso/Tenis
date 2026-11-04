@@ -1,5 +1,5 @@
 import type { Id } from '../domain/common';
-import type { Match, Round } from '../domain/match';
+import type { Group, Match, Round } from '../domain/match';
 import type { Player } from '../domain/player';
 import type { Entry } from '../domain/registration';
 import type { AppSettings } from '../domain/settings';
@@ -82,6 +82,18 @@ export interface RoundRepository {
   ): Unsubscribe;
 }
 
+export interface GroupRepository {
+  listByTournament(tournamentId: Id): Promise<Group[]>;
+  listAll(): Promise<Group[]>;
+  saveMany(groups: readonly Group[]): Promise<void>;
+  deleteByTournament(tournamentId: Id): Promise<void>;
+  observeByTournament(
+    tournamentId: Id,
+    listener: Listener<Group[]>,
+    onError?: ErrorListener,
+  ): Unsubscribe;
+}
+
 export interface SettingsRepository {
   get(): Promise<AppSettings>;
   save(settings: AppSettings): Promise<void>;
@@ -94,6 +106,7 @@ export interface Repositories {
   entries: EntryRepository;
   matches: MatchRepository;
   rounds: RoundRepository;
+  groups: GroupRepository;
   settings: SettingsRepository;
   /** Ejecuta varias operaciones de forma atómica. */
   transaction<T>(work: () => Promise<T>): Promise<T>;

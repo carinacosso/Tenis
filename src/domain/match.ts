@@ -18,10 +18,29 @@ export interface Match extends EntityBase {
   sideA: SideSource;
   sideB: SideSource;
   result: MatchResult | null;
+  /** Etapa: fase de grupos/liga o cuadro final de playoffs. Sin valor = cuadro principal. */
+  stage?: MatchStage;
+  /** Grupo al que pertenece (fase de grupos y liga). */
+  groupId?: Id;
 }
 
+export type MatchStage = 'group' | 'playoff';
+
+/** Grupo de la fase de grupos (en la liga hay un único grupo). */
+export interface Group extends EntityBase {
+  tournamentId: Id;
+  /** "A", "B"… o "Liga". */
+  name: string;
+  /** Orden del grupo (0 = A). */
+  index: number;
+  entryIds: Id[];
+}
+
+export type GroupPlan = Pick<Group, 'id' | 'name' | 'index' | 'entryIds'>;
+
 /** Partido generado por el sorteo, antes de agregarle los campos de persistencia. */
-export type MatchPlan = Pick<Match, 'id' | 'round' | 'position' | 'sideA' | 'sideB'>;
+export type MatchPlan = Pick<Match, 'id' | 'round' | 'position' | 'sideA' | 'sideB'> &
+  Partial<Pick<Match, 'stage' | 'groupId'>>;
 
 /** Ronda de un formato rotativo: guarda quiénes descansan. */
 export interface Round extends EntityBase {

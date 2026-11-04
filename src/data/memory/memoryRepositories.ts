@@ -1,11 +1,12 @@
 import type { Id } from '../../domain/common';
-import type { Match, Round } from '../../domain/match';
+import type { Group, Match, Round } from '../../domain/match';
 import type { Player } from '../../domain/player';
 import type { Entry } from '../../domain/registration';
 import { type AppSettings, DEFAULT_SETTINGS } from '../../domain/settings';
 import type { Tournament } from '../../domain/tournament';
 import type {
   EntryRepository,
+  GroupRepository,
   Listener,
   MatchRepository,
   PlayerRepository,
@@ -79,6 +80,7 @@ export function createMemoryRepositories(): Repositories {
   const entryTable = new MemoryTable<Entry>(feed);
   const matchTable = new MemoryTable<Match>(feed);
   const roundTable = new MemoryTable<Round>(feed);
+  const groupTable = new MemoryTable<Group>(feed);
   let settingsValue: AppSettings = clone(DEFAULT_SETTINGS);
 
   const players: PlayerRepository = {
@@ -130,6 +132,15 @@ export function createMemoryRepositories(): Repositories {
       feed.watch(() => roundTable.where(byTournament(tid)), listener),
   };
 
+  const groups: GroupRepository = {
+    listByTournament: (tid) => groupTable.where(byTournament(tid)),
+    listAll: () => groupTable.where(all),
+    saveMany: (rows) => groupTable.put(rows),
+    deleteByTournament: (tid) => groupTable.delete(byTournament(tid)),
+    observeByTournament: (tid, listener) =>
+      feed.watch(() => groupTable.where(byTournament(tid)), listener),
+  };
+
   const settings: SettingsRepository = {
     get: async () => clone(settingsValue),
     save: async (value) => {
@@ -145,6 +156,7 @@ export function createMemoryRepositories(): Repositories {
     entries,
     matches,
     rounds,
+    groups,
     settings,
     transaction: (work) => work(),
     clearAll: async () => {
@@ -154,6 +166,7 @@ export function createMemoryRepositories(): Repositories {
         entryTable.delete(all),
         matchTable.delete(all),
         roundTable.delete(all),
+        groupTable.delete(all),
       ]);
       await settings.save(clone(DEFAULT_SETTINGS));
     },

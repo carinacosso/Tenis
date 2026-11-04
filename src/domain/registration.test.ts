@@ -7,6 +7,7 @@ import {
   confirmedEntries,
   entriesToPromote,
   maxSeeds,
+  maxSeedsFor,
   paymentSummary,
   statusForNewEntry,
   waitlist,
@@ -154,6 +155,31 @@ describe('Americano mixto', () => {
     const threeMen = ['m1', 'm2', 'm3', 'f1'].map(entry);
     expect(checkCanGenerateDraw(mixed, threeMen, sexes2)).toBe(
       'Se necesitan al menos 2 hombres y 2 mujeres (hay 3 y 1).',
+    );
+  });
+});
+
+describe('grupos', () => {
+  const groups = makeTournament({
+    format: { kind: 'groups', groupCount: 2, qualifiersPerGroup: 2 },
+  });
+  const entries = (n: number) => Array.from({ length: n }, (_, i) => makeEntry({ id: `e${i}` }));
+
+  it('cada grupo tiene que tener más jugadores que clasificados', () => {
+    expect(checkCanGenerateDraw(groups, entries(5))).toMatch(/cada grupo tiene que tener más de 2/);
+    expect(checkCanGenerateDraw(groups, entries(6))).toBeNull();
+    expect(checkCanGenerateDraw(groups, entries(3))).toMatch(/al menos 4/);
+  });
+
+  it('cabezas de serie: hasta 2 por grupo', () => {
+    expect(maxSeedsFor(groups, 10)).toBe(4);
+    expect(maxSeedsFor(groups, 3)).toBe(3);
+    expect(maxSeedsFor(makeTournament(), 8)).toBe(4);
+    expect(maxSeedsFor(makeTournament({ format: { kind: 'league', doubleRound: false } }), 8)).toBe(
+      0,
+    );
+    expect(checkSeeds(entries(6), ['e0', 'e1', 'e2', 'e3', 'e4'], 4)).toBe(
+      'Como máximo puede haber 4 cabezas de serie.',
     );
   });
 });

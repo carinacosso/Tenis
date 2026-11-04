@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { confirmedEntries, maxSeeds } from '../../domain/registration';
+import { confirmedEntries, maxSeedsFor } from '../../domain/registration';
 import { Page } from '../components/Layout';
 import { Button } from '../components/ui';
 import { entryName } from '../format';
@@ -32,7 +32,8 @@ export function SeedsPage() {
       .filter((e) => e.seed !== null)
       .sort((a, b) => (a.seed ?? 0) - (b.seed ?? 0))
       .map((e) => e.id);
-  const max = maxSeeds(confirmed.length);
+  const max = maxSeedsFor(state.tournament, confirmed.length);
+  const groups = state.tournament.format.kind === 'groups';
 
   const toggle = (entryId: string) => {
     setError(null);
@@ -52,6 +53,7 @@ export function SeedsPage() {
       <p className="text-lg">
         Tocá a los favoritos en orden: el primero es el cabeza 1. Con {confirmed.length} inscriptos
         podés elegir hasta {max}. Son opcionales.
+        {groups && ' Los cabezas van a grupos distintos.'}
       </p>
       {error && (
         <p role="alert" className="rounded-xl bg-red-100 p-3 font-semibold text-red-900">

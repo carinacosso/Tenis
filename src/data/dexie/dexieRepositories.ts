@@ -3,6 +3,7 @@ import type { Id } from '../../domain/common';
 import { type AppSettings, DEFAULT_SETTINGS } from '../../domain/settings';
 import type {
   EntryRepository,
+  GroupRepository,
   ErrorListener,
   Listener,
   MatchRepository,
@@ -109,6 +110,20 @@ export function createDexieRepositories(db: TenisDatabase = new TenisDatabase())
       observe(() => roundsOf(tid), listener, onError),
   };
 
+  const groupsOf = (tid: Id) => db.groups.where('tournamentId').equals(tid).toArray();
+  const groups: GroupRepository = {
+    listByTournament: groupsOf,
+    listAll: () => db.groups.toArray(),
+    saveMany: async (rows) => {
+      await db.groups.bulkPut([...rows]);
+    },
+    deleteByTournament: async (tid) => {
+      await db.groups.where('tournamentId').equals(tid).delete();
+    },
+    observeByTournament: (tid, listener, onError) =>
+      observe(() => groupsOf(tid), listener, onError),
+  };
+
   const settings: SettingsRepository = {
     get: async () => toSettings(await db.settings.get(SETTINGS_KEY)),
     save: async (value) => {
@@ -124,6 +139,7 @@ export function createDexieRepositories(db: TenisDatabase = new TenisDatabase())
     entries,
     matches,
     rounds,
+    groups,
     settings,
     transaction: (work) => db.transaction('rw', db.tables, work),
     clearAll: async () => {

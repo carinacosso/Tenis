@@ -95,13 +95,16 @@ export function bracketSize(entryCount: number): number {
   return size;
 }
 
-/** Valida la lista ordenada de cabezas de serie. */
-export function checkSeeds(entries: readonly Entry[], seededIds: readonly Id[]): string | null {
+/** Valida la lista ordenada de cabezas de serie. `max` por defecto: mitad del cuadro. */
+export function checkSeeds(
+  entries: readonly Entry[],
+  seededIds: readonly Id[],
+  max = maxSeeds(confirmedEntries(entries).length),
+): string | null {
   const confirmed = new Set(confirmedEntries(entries).map((e) => e.id));
   if (new Set(seededIds).size !== seededIds.length) return 'Hay cabezas de serie repetidos.';
   if (seededIds.some((id) => !confirmed.has(id)))
     return 'Solo pueden ser cabezas de serie los inscriptos confirmados.';
-  const max = maxSeeds(confirmed.size);
   if (seededIds.length > max) return `Como máximo puede haber ${max} cabezas de serie.`;
   return null;
 }
@@ -116,6 +119,13 @@ export function checkCanGenerateDraw(
   const confirmed = confirmedEntries(entries);
   const count = confirmed.length;
   if (count < min) return `Se necesitan al menos ${min} inscriptos confirmados (hay ${count}).`;
+  if (tournament.format.kind === 'groups') {
+    const { groupCount, qualifiersPerGroup } = tournament.format;
+    const smallest = Math.floor(count / groupCount);
+    if (smallest <= qualifiersPerGroup)
+      return `Con ${count} inscriptos y ${groupCount} grupos, cada grupo tiene que tener más de ${qualifiersPerGroup} (clasifican ${qualifiersPerGroup}). Sumá inscriptos o bajá la cantidad de grupos.`;
+    if (groupCount * qualifiersPerGroup < 2) return 'Tienen que clasificar al menos 2.';
+  }
   if (isMixed(tournament)) {
     const sexes = confirmed.map((e) => sexOf(e.playerIds[0] ?? ''));
     if (sexes.some((x) => x === null)) return 'Hay jugadores sin sexo indicado.';
@@ -146,4 +156,12 @@ export function paymentSummary(entries: readonly Entry[]): PaymentSummary {
     }
   }
   return summary;
+}
+
+/** Máximo de cabezas de serie según el formato (en grupos, uno por grupo como mínimo útil, hasta todos). */
+export function maxSeedsFor(tournament: Tournament, confirmedCount: number): number {
+  if (tournament.format.kind === 'groups')
+    return Math.min(confirmedCount, tournament.format.groupCount * 2);
+  if (tournament.format.kind === 'knockout') return maxSeeds(confirmedCount);
+  return 0;
 }

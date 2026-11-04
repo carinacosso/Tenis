@@ -131,6 +131,24 @@ describe('TournamentService', () => {
     expect(rename.ok).toBe(true);
   });
 
+  it('un torneo viejo sin orden de desempate guardado se puede editar después del sorteo', async () => {
+    const t = await createTournament({ maxEntries: 8 });
+    await registerAll(t.id, ['p1', 'p2']);
+    await services.tournaments.generateDraw(t.id);
+    const stored = await repos.tournaments.getById(t.id);
+    if (!stored) throw new Error();
+    const legacy = { ...stored };
+    delete legacy.tiebreakOrder;
+    await repos.tournaments.save(legacy);
+    const r = await services.tournaments.update(t.id, {
+      ...draft,
+      maxEntries: 8,
+      name: 'Renombrado',
+      tiebreakOrder: ['wins', 'setDiff', 'gameDiff', 'headToHead'],
+    });
+    expect(r.ok).toBe(true);
+  });
+
   it('no genera cruces con menos del mínimo', async () => {
     const t = await createTournament();
     await registerAll(t.id, ['p1']);

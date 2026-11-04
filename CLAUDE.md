@@ -9,7 +9,7 @@
 | 1. Base (arquitectura, repositorios, ABM jugadores, verify, hooks, CI, deploy) | ✅ Hecha  |
 | 2. Primer torneo (inscripción, eliminación directa, puntuación, resultados)    | ✅ Hecha  |
 | 3. Rotativos (Americano dobles/singles/mixto, Mexicano)                        | ✅ Hecha  |
-| 4. Grupos + playoffs, liga, desempates                                         | Pendiente |
+| 4. Grupos + playoffs, liga, desempates                                         | ✅ Hecha  |
 | 5. Canchas/horarios, W.O./abandonos, consolación                               | Pendiente |
 | 6. Compartir imagen, PDF, Excel, backup, historial, estadísticas               | Pendiente |
 | 7. Instalación guiada, pulido, Lighthouse                                      | Pendiente |
@@ -60,6 +60,8 @@ Fase 3: `FormatConfig` suma `americano` (variantes doubles/singles/mixed) y `mex
 
 Archivos de dominio: `player.ts`, `settings.ts`, `tournament.ts`, `registration.ts` (inscripción, lista de espera, pagos, cabezas), `match.ts` (Match, Round, SideSource), `knockout.ts` (sorteo, resolución, cascada, podio), `rotation.ts` (Americano y Mexicano), `rotationStandings.ts` (ranking y avance de rondas), `scoring.ts` (configuración y validación de resultados), `random.ts` (rng con semilla).
 
+Fase 4: `FormatConfig` suma `groups` (`groupCount`, `qualifiersPerGroup`) y `league` (`doubleRound`); `Tournament.tiebreakOrder` (opcional, por defecto ganados → sets → games → directo); `Match.stage` (`group` | `playoff`) y `Match.groupId`; entidad `Group` (Dexie versión 4, tabla `groups`; la liga es un único grupo "Liga"). Dominio: `standings.ts` (tablas por sets con desempate configurable y mini tabla para el directo) y `groups.ts` (reparto en zigzag, fixture con el círculo, tablas por grupo y armado del cuadro final).
+
 Algoritmo de rotación (`rotation.ts`): descansa primero quien menos descansó; en dobles con N múltiplo de 4 se alterna el método del círculo (compañeros sin repetir garantizado) con búsqueda local, y en el resto se usa búsqueda local con costo = 10·(compañeros repetidos)² + (rivales repetidos)². Se generan varias planificaciones completas y se elige la de menor costo. Singles usa el círculo (cada rival una vez). Mixto: parejas hombre+mujer, rotación de compañeras como punto de partida.
 
 Planificado / pendiente de completar en fases siguientes:
@@ -109,6 +111,16 @@ Otras decisiones de la fase 3:
 - Americano: se generan todas las rondas al sortear. Mexicano: la ronda 1 al sortear, el resto con el botón "Generar ronda N" cuando la anterior está completa; la última ronda se puede "Rearmar" mientras no tenga resultados.
 - Americano mixto: todos los inscriptos necesitan sexo cargado; mínimo 2 hombres y 2 mujeres. Si sobran de un sexo, descansan por turnos.
 - Podio de rotativos: los 3 primeros del ranking.
+
+Decisiones de la fase 4:
+
+- Tablas: el orden de desempate se configura por torneo; el sorteo siempre va al final (estable por torneo). Con 3 o más empatados, el enfrentamiento directo es una mini tabla (ganados entre ellos) y si sigue el empate se pasa al siguiente criterio.
+- El super tie-break cuenta como set y como 1 game para el que lo gana (no suma sus puntos como games).
+- Grupos: los cabezas de serie (hasta 2 por grupo) se reparten en zigzag; el resto, sorteado. Cada grupo debe tener más jugadores que clasificados. Clasifica una cantidad fija por grupo (sin mejores terceros).
+- Cuadro final: se arma solo al terminar la fase de grupos. Los 1° son cabezas (comparados entre grupos por promedio de ganados, sets y games por partido); los byes van a los mejores; el resto se ubica para que los del mismo grupo se crucen lo más tarde posible y el mejor enfrente al 1° más débil. Con 2 grupos: 1°A vs 2°B y 1°B vs 2°A.
+- Si se corrige un resultado de grupo y cambian los clasificados, el cuadro final se rearma; si ya tenía resultados, se pide confirmación antes de borrarlos.
+- Liga: solo ida o ida y vuelta (configurable). Termina al jugarse todos los partidos; podio = 3 primeros de la tabla.
+- Grupos y liga se juegan por sets; la modalidad (singles/dobles) es libre.
 
 ## Convenciones
 

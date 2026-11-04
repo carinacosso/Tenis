@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { resolveKnockout, roundName } from '../../domain/knockout';
+import { resolveKnockout } from '../../domain/knockout';
 import {
   type QuickSetScore,
   type SetScore,
@@ -16,6 +16,7 @@ import { isRotation } from '../../domain/tournament';
 import { Page } from '../components/Layout';
 import { Button, Card } from '../components/ui';
 import { entryName } from '../format';
+import { matchTitle } from '../matchTitle';
 import { useTournament } from '../hooks/useTournament';
 import { useServices } from '../ServicesContext';
 import { ScoreResultForm } from './ScoreResultForm';
@@ -116,7 +117,6 @@ export function MatchResultPage() {
     );
   }
 
-  const rounds = Math.max(...state.matches.map((m) => m.round));
   const nameA = entryName(state.entriesById.get(target.a ?? ''), state.players);
   const nameB = entryName(state.entriesById.get(target.b ?? ''), state.players);
   const nameOf = (side: Side) => (side === 'A' ? nameA : nameB);
@@ -165,14 +165,14 @@ export function MatchResultPage() {
   const affected = (pending?.cleared ?? []).map((mid) => {
     const r = resolved.get(mid);
     if (!r) return '';
-    return `${roundName(r.match.round, rounds)}: ${entryName(state.entriesById.get(r.a ?? ''), state.players)} vs ${entryName(state.entriesById.get(r.b ?? ''), state.players)}`;
+    return `${matchTitle(r.match, state)}: ${entryName(state.entriesById.get(r.a ?? ''), state.players)} vs ${entryName(state.entriesById.get(r.b ?? ''), state.players)}`;
   });
 
   return (
     <Page title="Resultado" back={back}>
       <Card>
         <p className="text-sm font-semibold text-neutral-600 uppercase dark:text-neutral-400">
-          {roundName(target.match.round, rounds)}
+          {matchTitle(target.match, state)}
         </p>
         <p className="text-xl font-bold">{nameA}</p>
         <p className="text-neutral-600 dark:text-neutral-400">vs</p>

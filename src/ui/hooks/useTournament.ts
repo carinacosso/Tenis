@@ -1,7 +1,7 @@
 import { useCallback, useMemo } from 'react';
 import type { ErrorListener, Listener } from '../../data/ports';
 import type { Id } from '../../domain/common';
-import type { Match, Round } from '../../domain/match';
+import type { Group, Match, Round } from '../../domain/match';
 import type { Player } from '../../domain/player';
 import type { Entry } from '../../domain/registration';
 import type { Tournament } from '../../domain/tournament';
@@ -36,6 +36,7 @@ export interface TournamentData {
   entries: Entry[];
   matches: Match[];
   rounds: Round[];
+  groups: Group[];
   players: PlayersById;
   entriesById: ReadonlyMap<Id, Entry>;
 }
@@ -77,16 +78,24 @@ export function useTournament(id: Id): TournamentState {
       [tournaments, id],
     ),
   );
+  const groups = useObservable(
+    useCallback(
+      (listener: Listener<Group[]>, onError: ErrorListener) =>
+        tournaments.observeGroups(id, listener, onError),
+      [tournaments, id],
+    ),
+  );
   const players = useAllPlayers();
 
   return useMemo((): TournamentState => {
-    const parts = [tournament, entries, matches, rounds, players];
+    const parts = [tournament, entries, matches, rounds, groups, players];
     if (parts.some((p) => p.status === 'error')) return { status: 'error' };
     if (
       tournament.status !== 'ready' ||
       entries.status !== 'ready' ||
       matches.status !== 'ready' ||
       rounds.status !== 'ready' ||
+      groups.status !== 'ready' ||
       players.status !== 'ready'
     ) {
       return { status: 'loading' };
@@ -99,8 +108,9 @@ export function useTournament(id: Id): TournamentState {
       entries: activeEntries,
       matches: matches.data,
       rounds: [...rounds.data].sort((a, b) => a.number - b.number),
+      groups: [...groups.data].sort((a, b) => a.index - b.index),
       players: indexPlayers(players.data),
       entriesById: new Map(activeEntries.map((e) => [e.id, e])),
     };
-  }, [tournament, entries, matches, rounds, players]);
+  }, [tournament, entries, matches, rounds, groups, players]);
 }

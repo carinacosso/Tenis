@@ -1,6 +1,15 @@
 import { type Id, LOCAL_OWNER, type ValidationResult } from '../domain/common';
 import { applyKnockoutResult, generateKnockout, isKnockoutFinished } from '../domain/knockout';
-import type { Match, MatchPlan, Round, RoundPlan } from '../domain/match';
+import {
+  buildPlayoff,
+  computeGroupTables,
+  distributeGroups,
+  generateGroupStage,
+  isGroupStageComplete,
+  playoffMatches,
+} from '../domain/groups';
+import type { Group, GroupPlan, Match, MatchPlan, Round, RoundPlan } from '../domain/match';
+import { shuffle } from '../domain/random';
 import type { Player } from '../domain/player';
 import {
   type Entry,
@@ -10,6 +19,7 @@ import {
   checkSeeds,
   confirmedEntries,
   entriesToPromote,
+  maxSeedsFor,
   statusForNewEntry,
 } from '../domain/registration';
 import {
@@ -32,6 +42,8 @@ import {
   type TournamentDraft,
   type TournamentField,
   isRotation,
+  tiebreakOrderOf,
+  usesSeeds,
   validateTournamentDraft,
 } from '../domain/tournament';
 import type { ErrorListener, Listener, Repositories, Unsubscribe } from '../data/ports';
@@ -87,6 +99,10 @@ export class TournamentService {
     return this.repos.rounds.observeByTournament(id, listener, onError);
   }
 
+  observeGroups(id: Id, listener: Listener<Group[]>, onError?: ErrorListener): Unsubscribe {
+    return this.repos.groups.observeByTournament(id, listener, onError);
+  }
+
   get(id: Id): Promise<Tournament | undefined> {
     return this.repos.tournaments.getById(id);
   }
@@ -129,8 +145,11 @@ export class TournamentService {
     const validation = validateTournamentDraft(draft, confirmedEntries(entries).length);
     if (!validation.ok) return validation;
     if (existing.drawGeneratedAt !== null) {
+      // El orden de desempate se compara con su valor efectivo (los torneos viejos no lo tienen guardado).
+      const lockedValue = (t: TournamentDraft, field: TournamentField) =>
+        JSON.stringify(field === 'tiebreakOrder' ? tiebreakOrderOf(t) : t[field]);
       const changed = LOCKED_AFTER_DRAW.find(
-        (field) => JSON.stringify(existing[field]) !== JSON.stringify(validation.value[field]),
+        (field) => lockedValue(existing, field) !== lockedValue(validation.value, field),
       );
       if (changed) {
         return {
@@ -241,13 +260,14 @@ export class TournamentService {
     ]);
   }
 
-  /** Define los cabezas de serie en orden (el primero es el cabeza 1). Solo eliminación directa. */
+  /** Define los cabezas de serie en orden (el primero es el cabeza 1). Eliminación directa y grupos. */
   async setSeeds(tournamentId: Id, orderedEntryIds: Id[]): Promise<ActionResult> {
     const tournament = await this.requireTournament(tournamentId);
-    if (isRotation(tournament.format)) return fail('Este formato no usa cabezas de serie.');
+    if (!usesSeeds(tournament.format)) return fail('Este formato no usa cabezas de serie.');
     if (tournament.drawGeneratedAt !== null) return fail('Los cruces ya están generados.');
     const entries = await this.repos.entries.listByTournament(tournamentId);
-    const error = checkSeeds(entries, orderedEntryIds);
+    const max = maxSeedsFor(tournament, confirmedEntries(entries).length);
+    const error = checkSeeds(entries, orderedEntryIds, max);
     if (error) return fail(error);
     const now = this.stamp();
     const changed = entries.flatMap((e): Entry[] => {
@@ -269,6 +289,10 @@ export class TournamentService {
     return plans.map((plan) => ({ ...plan, ...this.base(now), tournamentId }));
   }
 
+  private toGroups(tournamentId: Id, plans: readonly GroupPlan[], now: string): Group[] {
+    return plans.map((plan) => ({ ...plan, ...this.base(now), tournamentId }));
+  }
+
   async generateDraw(tournamentId: Id): Promise<ActionResult<Match[]>> {
     const tournament = await this.requireTournament(tournamentId);
     if (tournament.drawGeneratedAt !== null) return fail('Los cruces ya están generados.');
@@ -282,8 +306,35 @@ export class TournamentService {
     const { format } = tournament;
 
     let plans: { rounds: RoundPlan[]; matches: MatchPlan[] };
+    let groupPlans: GroupPlan[] = [];
     let plannedRounds: number | null = null;
-    if (format.kind === 'knockout') {
+    if (format.kind === 'groups' || format.kind === 'league') {
+      groupPlans =
+        format.kind === 'groups'
+          ? distributeGroups(
+              confirmed.map((e) => ({ id: e.id, seed: e.seed })),
+              format.groupCount,
+              this.deps.random,
+              this.deps.newId,
+            )
+          : [
+              {
+                id: this.deps.newId(),
+                name: 'Liga',
+                index: 0,
+                entryIds: shuffle(
+                  confirmed.map((e) => e.id),
+                  this.deps.random,
+                ),
+              },
+            ];
+      plans = generateGroupStage(
+        groupPlans,
+        format.kind === 'league' && format.doubleRound,
+        this.deps.random,
+        this.deps.newId,
+      );
+    } else if (format.kind === 'knockout') {
       plans = {
         rounds: [],
         matches: generateKnockout(
@@ -328,8 +379,10 @@ export class TournamentService {
     await this.repos.transaction(async () => {
       await this.repos.matches.deleteByTournament(tournamentId);
       await this.repos.rounds.deleteByTournament(tournamentId);
+      await this.repos.groups.deleteByTournament(tournamentId);
       await this.repos.matches.saveMany(matches);
       await this.repos.rounds.saveMany(this.toRounds(tournamentId, plans.rounds, now));
+      await this.repos.groups.saveMany(this.toGroups(tournamentId, groupPlans, now));
       await this.repos.tournaments.save({
         ...tournament,
         status: 'in_progress',
@@ -401,6 +454,7 @@ export class TournamentService {
     await this.repos.transaction(async () => {
       await this.repos.matches.deleteByTournament(tournamentId);
       await this.repos.rounds.deleteByTournament(tournamentId);
+      await this.repos.groups.deleteByTournament(tournamentId);
       const reopened: Tournament = {
         ...tournament,
         status: 'registration',
@@ -436,14 +490,31 @@ export class TournamentService {
       if (!check.ok) return { status: 'invalid', error: check.error };
     }
     const matches = await this.repos.matches.listByTournament(tournament.id);
+    const { format } = tournament;
 
     let updated: Match[];
     let cleared: Id[] = [];
+    let removed: Id[] = [];
+    let created: Match[] = [];
     let finished: boolean;
-    if (isRotation(tournament.format)) {
+    const now = this.stamp();
+
+    if (isRotation(format)) {
       updated = matches.map((m) => (m.id === matchId ? { ...m, result } : m));
       const rounds = await this.repos.rounds.listByTournament(tournament.id);
       finished = isRotationFinished(tournament.plannedRounds, updated, rounds);
+    } else if (format.kind === 'league') {
+      updated = matches.map((m) => (m.id === matchId ? { ...m, result } : m));
+      finished = updated.every((m) => m.result !== null);
+    } else if (format.kind === 'groups' && target.stage === 'group') {
+      updated = matches.map((m) => (m.id === matchId ? { ...m, result } : m));
+      const sync = await this.syncPlayoff(tournament, updated, now);
+      removed = sync.removed;
+      created = sync.created;
+      cleared = sync.cleared;
+      if (cleared.length > 0 && !confirmed) return { status: 'needsConfirmation', cleared };
+      updated = [...updated.filter((m) => !removed.includes(m.id)), ...created];
+      finished = isKnockoutFinished(playoffMatches(updated));
     } else {
       try {
         const applied = applyKnockoutResult(matches, matchId, result);
@@ -453,16 +524,20 @@ export class TournamentService {
         return { status: 'invalid', error: error instanceof Error ? error.message : String(error) };
       }
       if (cleared.length > 0 && !confirmed) return { status: 'needsConfirmation', cleared };
-      finished = isKnockoutFinished(updated);
+      finished = isKnockoutFinished(format.kind === 'groups' ? playoffMatches(updated) : updated);
     }
 
-    const now = this.stamp();
     const before = new Map(matches.map((m) => [m.id, m]));
     const changed = updated
-      .filter((m) => JSON.stringify(m.result) !== JSON.stringify(before.get(m.id)?.result))
+      .filter(
+        (m) =>
+          !created.includes(m) &&
+          JSON.stringify(m.result) !== JSON.stringify(before.get(m.id)?.result),
+      )
       .map((m) => ({ ...m, updatedAt: now }));
     await this.repos.transaction(async () => {
-      await this.repos.matches.saveMany(changed);
+      if (removed.length > 0) await this.repos.matches.deleteMany(removed);
+      await this.repos.matches.saveMany([...changed, ...created]);
       if (finished !== (tournament.status === 'finished')) {
         await this.repos.tournaments.save({
           ...tournament,
@@ -473,5 +548,43 @@ export class TournamentService {
       }
     });
     return { status: 'saved', cleared };
+  }
+
+  /**
+   * Mantiene el cuadro final al día con la fase de grupos: lo arma cuando terminan los grupos
+   * y lo rearma si cambian los clasificados. Devuelve qué partidos borrar y crear, y cuáles
+   * de los borrados ya tenían resultado (requieren confirmación).
+   */
+  private async syncPlayoff(
+    tournament: Tournament,
+    matches: readonly Match[],
+    now: string,
+  ): Promise<{ removed: Id[]; created: Match[]; cleared: Id[] }> {
+    const existing = playoffMatches(matches);
+    const none = { removed: [], created: [], cleared: [] };
+    if (tournament.format.kind !== 'groups') return none;
+    const firstRound = (ms: readonly Pick<Match, 'round' | 'position' | 'sideA' | 'sideB'>[]) =>
+      JSON.stringify(
+        ms
+          .filter((m) => m.round === 1)
+          .sort((a, b) => a.position - b.position)
+          .map((m) => [m.sideA, m.sideB]),
+      );
+    let created: Match[] = [];
+    if (isGroupStageComplete(matches)) {
+      const groups = await this.repos.groups.listByTournament(tournament.id);
+      const plan = buildPlayoff(
+        computeGroupTables(tournament, groups, matches),
+        tournament.format.qualifiersPerGroup,
+        this.deps.newId,
+      );
+      if (existing.length > 0 && firstRound(plan) === firstRound(existing)) return none;
+      created = this.toMatches(tournament.id, plan, now);
+    }
+    return {
+      removed: existing.map((m) => m.id),
+      created,
+      cleared: existing.filter((m) => m.result !== null).map((m) => m.id),
+    };
   }
 }

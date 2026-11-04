@@ -24,7 +24,7 @@ export function Tabs<T extends string>({
             role="tab"
             aria-selected={selected}
             onClick={() => onChange(tab.value)}
-            className={`min-h-12 flex-1 rounded-xl text-lg font-semibold ${
+            className={`min-h-12 flex-1 rounded-xl font-semibold ${tabs.length > 3 ? 'text-base' : 'text-lg'} ${
               selected
                 ? 'bg-white text-neutral-950 shadow dark:bg-neutral-700 dark:text-white'
                 : 'text-neutral-700 dark:text-neutral-300'

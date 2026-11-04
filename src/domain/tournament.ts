@@ -13,14 +13,56 @@ export type AmericanoVariant = 'doubles' | 'singles' | 'mixed';
  */
 export type FormatConfig =
   | { kind: 'knockout' }
+  | { kind: 'groups'; groupCount: number; qualifiersPerGroup: number }
+  | { kind: 'league'; doubleRound: boolean }
   | { kind: 'americano'; variant: AmericanoVariant; rounds: number | null }
   | { kind: 'mexicano'; rounds: number | null };
 
 export type FormatKind = FormatConfig['kind'];
 
 /** Clave del formato para la UI (incluye la variante del Americano). */
+/** Criterios de desempate de las tablas (el sorteo siempre va al final). */
+export type TiebreakCriterion = 'wins' | 'setDiff' | 'gameDiff' | 'headToHead';
+
+export const DEFAULT_TIEBREAK_ORDER: readonly TiebreakCriterion[] = [
+  'wins',
+  'setDiff',
+  'gameDiff',
+  'headToHead',
+];
+
+export const TIEBREAK_LABELS: Record<TiebreakCriterion, string> = {
+  wins: 'Partidos ganados',
+  setDiff: 'Diferencia de sets',
+  gameDiff: 'Diferencia de games',
+  headToHead: 'Enfrentamiento directo',
+};
+
+export function checkTiebreakOrder(order: readonly TiebreakCriterion[]): string | null {
+  const all = [...DEFAULT_TIEBREAK_ORDER].sort();
+  return JSON.stringify([...order].sort()) === JSON.stringify(all)
+    ? null
+    : 'El orden de desempate tiene que incluir cada criterio una vez.';
+}
+
+/** Formatos que usan tabla de posiciones por sets. */
+export function hasStandings(format: FormatConfig): boolean {
+  return format.kind === 'groups' || format.kind === 'league';
+}
+
+/** Formatos con cabezas de serie. */
+export function usesSeeds(format: FormatConfig): boolean {
+  return format.kind === 'knockout' || format.kind === 'groups';
+}
+
 export type FormatChoice =
-  'knockout' | 'americano_doubles' | 'americano_singles' | 'americano_mixed' | 'mexicano';
+  | 'knockout'
+  | 'groups'
+  | 'league'
+  | 'americano_doubles'
+  | 'americano_singles'
+  | 'americano_mixed'
+  | 'mexicano';
 
 export function formatChoice(format: FormatConfig): FormatChoice {
   if (format.kind === 'americano') return `americano_${format.variant}`;
@@ -31,6 +73,10 @@ export function formatFromChoice(choice: FormatChoice, rounds: number | null = n
   switch (choice) {
     case 'knockout':
       return { kind: 'knockout' };
+    case 'groups':
+      return { kind: 'groups', groupCount: 2, qualifiersPerGroup: 2 };
+    case 'league':
+      return { kind: 'league', doubleRound: false };
     case 'mexicano':
       return { kind: 'mexicano', rounds };
     case 'americano_doubles':
@@ -45,18 +91,19 @@ export function formatFromChoice(choice: FormatChoice, rounds: number | null = n
 /** Formatos rotativos: inscripción individual, parejas o rivales que cambian cada ronda y ranking por puntos. */
 export function isRotation(
   format: FormatConfig,
-): format is Exclude<FormatConfig, { kind: 'knockout' }> {
-  return format.kind !== 'knockout';
+): format is Extract<FormatConfig, { kind: 'americano' | 'mexicano' }> {
+  return format.kind === 'americano' || format.kind === 'mexicano';
 }
 
 /** Modalidad que impone el formato (null si se elige libremente). */
 export function impliedModality(format: FormatConfig): Modality | null {
-  if (format.kind === 'knockout') return null;
+  if (!isRotation(format)) return null;
   if (format.kind === 'americano' && format.variant === 'singles') return 'singles';
   return 'doubles';
 }
 
 export const MAX_ROUNDS = 50;
+export const MAX_GROUPS = 16;
 
 export type TournamentStatus = 'registration' | 'in_progress' | 'finished';
 
@@ -78,6 +125,8 @@ export interface Tournament extends EntityBase {
   finishedAt: IsoDateTime | null;
   /** Rondas totales de un rotativo, fijadas al generar los cruces (null en eliminación directa). */
   plannedRounds?: number | null;
+  /** Orden de desempate de las tablas (grupos y liga). Sin valor = DEFAULT_TIEBREAK_ORDER. */
+  tiebreakOrder?: TiebreakCriterion[];
 }
 
 export interface TournamentDraft {
@@ -90,12 +139,16 @@ export interface TournamentDraft {
   scoring: ScoringConfig;
   maxEntries: number;
   entryFee: number;
+  /** Solo grupos y liga. */
+  tiebreakOrder?: TiebreakCriterion[];
 }
 
 export type TournamentField = keyof TournamentDraft;
 
 export const FORMAT_LABELS: Record<FormatChoice, string> = {
   knockout: 'Eliminación directa',
+  groups: 'Grupos + playoffs',
+  league: 'Liga',
   americano_doubles: 'Americano dobles',
   americano_singles: 'Americano singles',
   americano_mixed: 'Americano mixto',
@@ -124,6 +177,10 @@ export function minEntriesFor(format: FormatConfig): number {
   switch (format.kind) {
     case 'knockout':
       return 2;
+    case 'groups':
+      return Math.max(2, format.groupCount) * 2;
+    case 'league':
+      return 3;
     case 'mexicano':
       return 4;
     case 'americano':
@@ -175,12 +232,27 @@ export function validateTournamentDraft(
   else if (isRotation(draft.format) && draft.scoring.kind === 'sets')
     errors.scoring = 'En los formatos rotativos el partido es a puntos o por tiempo.';
   else if (!isRotation(draft.format) && draft.scoring.kind !== 'sets')
-    errors.scoring = 'La eliminación directa se juega por sets.';
+    errors.scoring = 'Este formato se juega por sets.';
 
   if (isRotation(draft.format) && draft.format.rounds !== null) {
     const r = draft.format.rounds;
     if (!Number.isInteger(r) || r < 1 || r > MAX_ROUNDS)
       errors.format = `La cantidad de rondas debe ser entre 1 y ${MAX_ROUNDS}.`;
+  }
+  if (draft.format.kind === 'groups') {
+    const { groupCount, qualifiersPerGroup } = draft.format;
+    if (!Number.isInteger(groupCount) || groupCount < 2 || groupCount > MAX_GROUPS)
+      errors.format = `La cantidad de grupos debe ser entre 2 y ${MAX_GROUPS}.`;
+    else if (
+      !Number.isInteger(qualifiersPerGroup) ||
+      qualifiersPerGroup < 1 ||
+      qualifiersPerGroup > 4
+    )
+      errors.format = 'Clasifican entre 1 y 4 por grupo.';
+  }
+  if (draft.tiebreakOrder) {
+    const tiebreakError = checkTiebreakOrder(draft.tiebreakOrder);
+    if (tiebreakError) errors.tiebreakOrder = tiebreakError;
   }
 
   if (Object.keys(errors).length > 0) return { ok: false, errors };
@@ -198,7 +270,16 @@ export function validateTournamentDraft(
 }
 
 /** Campos que no se pueden cambiar una vez generados los cruces. */
-export const LOCKED_AFTER_DRAW: readonly TournamentField[] = ['modality', 'format', 'scoring'];
+export const LOCKED_AFTER_DRAW: readonly TournamentField[] = [
+  'modality',
+  'format',
+  'scoring',
+  'tiebreakOrder',
+];
+
+export function tiebreakOrderOf(t: Pick<Tournament, 'tiebreakOrder'>): TiebreakCriterion[] {
+  return t.tiebreakOrder ? [...t.tiebreakOrder] : [...DEFAULT_TIEBREAK_ORDER];
+}
 
 /** Jugadores por inscripción: en rotativos siempre 1 (las parejas cambian cada ronda). */
 export function playersPerEntry(t: Pick<Tournament, 'modality' | 'format'>): 1 | 2 {

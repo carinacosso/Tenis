@@ -14,12 +14,20 @@ import {
   waitlist,
 } from '../../domain/registration';
 import { describeScoring } from '../../domain/scoring';
-import { MODALITY_LABELS, STATUS_LABELS, formatLabel, isRotation } from '../../domain/tournament';
+import {
+  MODALITY_LABELS,
+  STATUS_LABELS,
+  formatLabel,
+  isRotation,
+  usesSeeds,
+} from '../../domain/tournament';
 import { ConfirmDialog, type ConfirmDialogProps } from '../components/ConfirmDialog';
 import { PlusIcon, TrashIcon } from '../components/Icons';
 import { Page } from '../components/Layout';
 import { MatchCard } from '../components/MatchCard';
 import { RankingTab, RotationPodium, RoundsTab } from '../components/RotationTabs';
+import { GroupsTab, LeaguePodium, LeagueTableTab } from '../components/StandingsTabs';
+import { bracketMatches, matchTitle } from '../matchTitle';
 import { Tabs } from '../components/Tabs';
 import { Toast } from '../components/Toast';
 import { useToast } from '../hooks/useToast';
@@ -28,7 +36,7 @@ import { entryName, formatDate, formatMoney } from '../format';
 import { type TournamentData, useTournament } from '../hooks/useTournament';
 import { useServices } from '../ServicesContext';
 
-type Tab = 'inscriptos' | 'partidos' | 'cuadro' | 'rondas' | 'ranking';
+type Tab = 'inscriptos' | 'partidos' | 'cuadro' | 'rondas' | 'ranking' | 'grupos' | 'tabla';
 type Confirm = Omit<ConfirmDialogProps, 'open' | 'onCancel'>;
 
 export function TournamentPage() {
@@ -48,19 +56,22 @@ export function TournamentPage() {
 
   const { tournament } = state;
   const rotation = isRotation(tournament.format);
-  const tabs: { value: Tab; label: string }[] = rotation
-    ? [
-        { value: 'inscriptos', label: 'Inscriptos' },
-        { value: 'rondas', label: 'Rondas' },
-        { value: 'ranking', label: 'Ranking' },
-      ]
-    : [
-        { value: 'inscriptos', label: 'Inscriptos' },
-        { value: 'partidos', label: 'Partidos' },
-        { value: 'cuadro', label: 'Cuadro' },
-      ];
+  const kind = tournament.format.kind;
+  const tabs: { value: Tab; label: string }[] = [{ value: 'inscriptos', label: 'Inscriptos' }];
+  if (rotation)
+    tabs.push({ value: 'rondas', label: 'Rondas' }, { value: 'ranking', label: 'Ranking' });
+  else if (kind === 'league')
+    tabs.push({ value: 'tabla', label: 'Tabla' }, { value: 'partidos', label: 'Partidos' });
+  else if (kind === 'groups')
+    tabs.push(
+      { value: 'grupos', label: 'Grupos' },
+      { value: 'partidos', label: 'Partidos' },
+      { value: 'cuadro', label: 'Cuadro' },
+    );
+  else tabs.push({ value: 'partidos', label: 'Partidos' }, { value: 'cuadro', label: 'Cuadro' });
   const started = tournament.drawGeneratedAt !== null;
-  const defaultTab: Tab = !started ? 'inscriptos' : rotation ? 'rondas' : 'partidos';
+  const playTab: Tab = rotation ? 'rondas' : 'partidos';
+  const defaultTab: Tab = !started ? 'inscriptos' : playTab;
   const requested = params.get('tab');
   const tab: Tab = tabs.find((t) => t.value === requested)?.value ?? defaultTab;
 
@@ -90,7 +101,13 @@ export function TournamentPage() {
       </div>
 
       {tournament.status === 'finished' &&
-        (rotation ? <RotationPodium data={state} /> : <PodiumCard data={state} />)}
+        (rotation ? (
+          <RotationPodium data={state} />
+        ) : kind === 'league' ? (
+          <LeaguePodium data={state} />
+        ) : (
+          <PodiumCard data={state} />
+        ))}
 
       <Tabs<Tab>
         label="Secciones del torneo"
@@ -102,15 +119,15 @@ export function TournamentPage() {
       {tab === 'inscriptos' && (
         <EntriesTab
           data={state}
-          onDrawGenerated={() =>
-            setParams({ tab: rotation ? 'rondas' : 'partidos' }, { replace: true })
-          }
+          onDrawGenerated={() => setParams({ tab: playTab }, { replace: true })}
         />
       )}
       {tab === 'partidos' && <MatchesTab data={state} />}
       {tab === 'cuadro' && <BracketTab data={state} />}
       {tab === 'rondas' && <RoundsTab data={state} />}
       {tab === 'ranking' && <RankingTab data={state} />}
+      {tab === 'grupos' && <GroupsTab data={state} />}
+      {tab === 'tabla' && <LeagueTableTab data={state} />}
 
       <DangerZone data={state} />
     </Page>
@@ -118,7 +135,7 @@ export function TournamentPage() {
 }
 
 function PodiumCard({ data }: { data: TournamentData }) {
-  const podium = knockoutPodium(data.matches);
+  const podium = knockoutPodium(bracketMatches(data.matches));
   const name = (id: string | null) =>
     id ? entryName(data.entriesById.get(id), data.players) : '—';
   return (
@@ -160,7 +177,7 @@ function EntriesTab({
   const waiting = waitlist(entries);
   const open = tournament.drawGeneratedAt === null;
   const summary = paymentSummary(entries);
-  const usesSeeds = !isRotation(tournament.format);
+  const seedsEnabled = usesSeeds(tournament.format);
   const unit =
     tournament.modality === 'doubles' && !isRotation(tournament.format) ? 'parejas' : 'jugadores';
   const seeded = confirmed.filter((e) => e.seed !== null).length;
@@ -228,14 +245,14 @@ function EntriesTab({
       )}
 
       {open && (
-        <div className={`grid gap-3 ${usesSeeds ? 'grid-cols-2' : 'grid-cols-1'}`}>
+        <div className={`grid gap-3 ${seedsEnabled ? 'grid-cols-2' : 'grid-cols-1'}`}>
           <Link
             to={`/torneos/${tournament.id}/inscribir`}
             className="inline-flex min-h-14 items-center justify-center gap-1 rounded-2xl bg-brand-800 text-lg font-semibold text-white dark:bg-brand-700"
           >
             <PlusIcon /> Inscribir
           </Link>
-          {usesSeeds && (
+          {seedsEnabled && (
             <Link
               to={`/torneos/${tournament.id}/cabezas`}
               className="inline-flex min-h-14 items-center justify-center rounded-2xl border-2 border-neutral-900 text-lg font-semibold dark:border-neutral-100"
@@ -386,10 +403,13 @@ function EntryRow({
 function useResolved(data: TournamentData) {
   return useMemo(() => {
     const resolved = [...resolveKnockout(data.matches).values()];
-    const rounds = Math.max(0, ...data.matches.map((m) => m.round));
+    const bracket = bracketMatches(data.matches);
+    const rounds = Math.max(0, ...bracket.map((m) => m.round));
     const nameOf = (entryId: string | null) =>
       entryId ? entryName(data.entriesById.get(entryId), data.players) : 'A definir';
-    return { resolved, rounds, nameOf };
+    const titleOf = (r: ResolvedMatch) => matchTitle(r.match, data);
+    const inBracket = new Set(bracket.map((m) => m.id));
+    return { resolved, rounds, nameOf, titleOf, inBracket };
   }, [data]);
 }
 
@@ -404,7 +424,7 @@ function NoDraw() {
 }
 
 function MatchesTab({ data }: { data: TournamentData }) {
-  const { resolved, rounds, nameOf } = useResolved(data);
+  const { resolved, nameOf, titleOf } = useResolved(data);
   if (data.matches.length === 0) return <NoDraw />;
 
   const byOrder = (x: ResolvedMatch, y: ResolvedMatch) =>
@@ -432,7 +452,7 @@ function MatchesTab({ data }: { data: TournamentData }) {
             key={r.match.id}
             resolved={r}
             nameOf={nameOf}
-            title={roundName(r.match.round, rounds)}
+            title={titleOf(r)}
             href={href(r)}
           />
         ))}
@@ -453,7 +473,7 @@ function MatchesTab({ data }: { data: TournamentData }) {
               key={r.match.id}
               resolved={r}
               nameOf={nameOf}
-              title={roundName(r.match.round, rounds)}
+              title={titleOf(r)}
               href={href(r)}
             />
           ))}
@@ -466,12 +486,22 @@ function MatchesTab({ data }: { data: TournamentData }) {
 // ── Cuadro ────────────────────────────────────────────────
 
 function BracketTab({ data }: { data: TournamentData }) {
-  const { resolved, rounds, nameOf } = useResolved(data);
+  const { resolved: all, rounds, nameOf, inBracket } = useResolved(data);
+  const resolved = all.filter((r) => inBracket.has(r.match.id));
   const firstPending = resolved
     .filter((r) => r.state === 'ready')
     .reduce((min, r) => Math.min(min, r.match.round), rounds);
   const [selected, setSelected] = useState<number | null>(null);
   if (data.matches.length === 0) return <NoDraw />;
+  if (resolved.length === 0) {
+    return (
+      <EmptyState title="Todavía no hay cuadro final">
+        <p className="text-lg text-neutral-700 dark:text-neutral-300">
+          Se arma solo cuando terminan todos los partidos de los grupos.
+        </p>
+      </EmptyState>
+    );
+  }
   const round = selected ?? Math.max(1, firstPending);
   const inRound = resolved
     .filter((r) => r.match.round === round)

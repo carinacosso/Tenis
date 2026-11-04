@@ -148,6 +148,33 @@ export function runRepositoryContract(name: string, create: () => Promise<Reposi
       expect((await repos.rounds.listAll()).map((r) => r.id)).toEqual(['r3']);
     });
 
+    it('grupos: guarda, filtra y borra por torneo', async () => {
+      const group = (id: string, tournamentId: string, index: number) => ({
+        id,
+        tournamentId,
+        name: 'A',
+        index,
+        entryIds: ['e1', 'e2'],
+        ownerId: 'local',
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        deletedAt: null,
+      });
+      await repos.groups.saveMany([
+        group('g1', 't1', 0),
+        group('g2', 't1', 1),
+        group('g3', 't2', 0),
+      ]);
+      expect((await repos.groups.listByTournament('t1')).map((g) => g.id).sort()).toEqual([
+        'g1',
+        'g2',
+      ]);
+      await repos.groups.deleteByTournament('t1');
+      expect((await repos.groups.listAll()).map((g) => g.id)).toEqual(['g3']);
+      await repos.clearAll();
+      expect(await repos.groups.listAll()).toEqual([]);
+    });
+
     it('partidos: borra puntuales', async () => {
       const plan = {
         round: 1,
