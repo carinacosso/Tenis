@@ -4,15 +4,15 @@
 
 ## Estado
 
-| Fase                                                                           | Estado    |
-| ------------------------------------------------------------------------------ | --------- |
-| 1. Base (arquitectura, repositorios, ABM jugadores, verify, hooks, CI, deploy) | ✅ Hecha  |
-| 2. Primer torneo (inscripción, eliminación directa, puntuación, resultados)    | ✅ Hecha  |
-| 3. Rotativos (Americano dobles/singles/mixto, Mexicano)                        | ✅ Hecha  |
-| 4. Grupos + playoffs, liga, desempates                                         | ✅ Hecha  |
-| 5. W.O./abandonos, consolación (canchas y horarios: descartado por el usuario) | ✅ Hecha  |
-| 6. Compartir imagen, PDF, Excel, backup, historial, estadísticas               | Parcial   |
-| 7. Instalación guiada, pulido, Lighthouse                                      | Pendiente |
+| Fase                                                                           | Estado   |
+| ------------------------------------------------------------------------------ | -------- |
+| 1. Base (arquitectura, repositorios, ABM jugadores, verify, hooks, CI, deploy) | ✅ Hecha |
+| 2. Primer torneo (inscripción, eliminación directa, puntuación, resultados)    | ✅ Hecha |
+| 3. Rotativos (Americano dobles/singles/mixto, Mexicano)                        | ✅ Hecha |
+| 4. Grupos + playoffs, liga, desempates                                         | ✅ Hecha |
+| 5. W.O./abandonos, consolación (canchas y horarios: descartado por el usuario) | ✅ Hecha |
+| 6. Compartir imagen, PDF, Excel, backup, historial, estadísticas               | Parcial  |
+| 7. Instalación guiada, pulido, Lighthouse                                      | ✅ Hecha |
 
 ## Forma de trabajo (de la especificación)
 
@@ -65,6 +65,8 @@ Fase 4: `FormatConfig` suma `groups` (`groupCount`, `qualifiersPerGroup`) y `lea
 Fase 5: `MatchResult.outcome` (`normal` | `walkover` | `retired` | `injury`; a puntos solo `normal` | `walkover`); `SetsResult.autoWalkoverFrom` marca los W.O. puestos por una lesión; formato `knockout` con `consolation?: boolean`; `Match.stage` suma `consolation`. Dominio: `scoring.ts` (`walkoverSets`, `buildWalkover`, `checkRetiredSets`, `effectiveSets`) y `consolation.ts` (quiénes entran y sorteo). Sin cambios de esquema Dexie.
 
 Fase 6 (parcial, a pedido del usuario: solo almacenamiento persistente, historial y estadísticas): `domain/playerHistory.ts` calcula, para un jugador, sus torneos (puesto en cada uno según el formato) y estadísticas; `PlayerService.history`. `app/storageService.ts` envuelve `navigator.storage` (inyectado en `AppDeps.storage`); se pide al iniciar (`main.tsx`) y el estado se ve en Ajustes. Pendiente de la fase 6: compartir imagen, PDF, Excel, backup JSON y recordatorio.
+
+Fase 7: `src/ui/install/` (`platform.ts` detecta el modo de instalación: instalada, con aviso del navegador, iPhone u otro; `installState.ts` guarda `beforeinstallprompt` desde `main.tsx`; `InstallCard` en Torneos y Ajustes). Las pantallas de torneo se cargan con `React.lazy` (el service worker las precarga igual). `scripts/check-pwa.mjs` (`npm run check:pwa`) verifica instalabilidad con `Page.getInstallabilityErrors` de Chrome, porque Lighthouse 12 ya no audita PWA. `public/robots.txt`.
 
 Algoritmo de rotación (`rotation.ts`): descansa primero quien menos descansó; en dobles con N múltiplo de 4 se alterna el método del círculo (compañeros sin repetir garantizado) con búsqueda local, y en el resto se usa búsqueda local con costo = 10·(compañeros repetidos)² + (rivales repetidos)². Se generan varias planificaciones completas y se elige la de menor costo. Singles usa el círculo (cada rival una vez). Mixto: parejas hombre+mujer, rotación de compañeras como punto de partida.
 
@@ -139,6 +141,11 @@ Decisiones de la fase 6 (parcial):
 - Estadísticas del jugador: solo inscripciones confirmadas en torneos con cruces generados. Los W.O. no cuentan como partido jugado; los abandonos sí (ganado o perdido) y suman solo los sets terminados y los games jugados.
 - Títulos: campeón en cuadros, 1.º en ligas y rotativos terminados. Podios: campeón, subcampeón y semifinalistas en cuadros; top 3 en tablas terminadas.
 - Almacenamiento persistente: se pide al abrir la app; si ya estaba concedido no se vuelve a pedir. En Ajustes se muestra el estado y, si no está protegido, un botón para volver a pedirlo.
+
+Decisiones de la fase 7:
+
+- La tarjeta "Instalá la app" se muestra siempre que no esté instalada (versión corta si ya hay torneos). En Android/Chrome usa el diálogo del navegador; en iPhone muestra los pasos con Compartir → "Agregar a inicio"; en otros navegadores, los pasos del menú.
+- Verificación PWA: criterios de instalación de Chrome (todos OK) y Lighthouse móvil: rendimiento 98, accesibilidad 100, buenas prácticas 100, SEO 100. Test e2e de uso sin conexión.
 
 ## Convenciones
 

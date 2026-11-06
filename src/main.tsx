@@ -6,10 +6,14 @@ import { createServices } from './app/services';
 import { createDexieRepositories } from './data/dexie/dexieRepositories';
 import { App } from './ui/App';
 import { ServicesProvider } from './ui/ServicesProvider';
+import { listenForInstall } from './ui/install/installState';
 import './index.css';
 
 // Composición: el único lugar donde se elige la implementación de persistencia.
 const services = createServices(createDexieRepositories(), browserDeps);
+
+// Guarda el aviso de "se puede instalar" del navegador, que puede llegar antes que React.
+listenForInstall();
 
 // Pide al navegador que no borre los datos por su cuenta (falta de espacio, poco uso).
 void services.storage.request();

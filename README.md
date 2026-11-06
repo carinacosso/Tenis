@@ -40,11 +40,25 @@ La primera vez que corras los e2e en tu máquina: `npx playwright install chromi
 
 ## Instalar la app
 
-**Android (Chrome):** abrí la app, tocá **Instalar app** o el menú ⋮ → **Instalar aplicación**.
+Mientras la app se use desde el navegador aparece la tarjeta **Instalá la app** (en Torneos y en Ajustes):
 
-**iPhone (Safari):** abrí la app en Safari, tocá el botón **Compartir** (cuadrado con flecha) → **Agregar a pantalla de inicio** → **Agregar**.
+- **Android (Chrome/Edge):** tocá **Instalar app** y confirmá. Se instala con un toque.
+- **iPhone/iPad (Safari):** tocá **Instalar app** y seguí los pasos: botón **Compartir** (cuadrado con flecha) → **Agregar a inicio** → **Agregar**.
+- **Otros navegadores:** menú ⋮ → **Instalar app** o **Agregar a la pantalla principal**.
 
-Conviene instalarla: abre más rápido, funciona sin internet y el navegador cuida mejor los datos guardados.
+Una vez instalada, la tarjeta desaparece. Conviene instalarla: abre más rápido, funciona sin internet y el navegador cuida mejor los datos (en Ajustes → Almacenamiento se ve si quedaron protegidos).
+
+## Verificar la PWA
+
+```bash
+npm run build
+npx vite preview --port 4173 &
+npm run check:pwa        # criterios de instalación de Chrome + manifest + service worker
+```
+
+`check:pwa` usa el mismo chequeo que Chrome para ofrecer "Instalar app" (Lighthouse ya no incluye la auditoría PWA desde la versión 12). Para rendimiento y accesibilidad: `npx lighthouse http://localhost:4173 --form-factor=mobile`.
+
+Resultado al cerrar la fase 7 (Lighthouse 12, celular): Rendimiento 98, Accesibilidad 100, Buenas prácticas 100, SEO 100. Los tests e2e verifican además que la app abre y guarda datos sin conexión.
 
 ## Migrar a otro hosting
 

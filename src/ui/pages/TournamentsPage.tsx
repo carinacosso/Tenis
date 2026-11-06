@@ -3,6 +3,7 @@ import { MODALITY_LABELS, STATUS_LABELS, type Tournament } from '../../domain/to
 import { ChevronIcon, PlusIcon } from '../components/Icons';
 import { Page } from '../components/Layout';
 import { EmptyState } from '../components/ui';
+import { InstallCard } from '../install/InstallCard';
 import { formatDate } from '../format';
 import { useActiveTournaments } from '../hooks/useTournament';
 
@@ -67,6 +68,7 @@ export function TournamentsPage() {
 
   return (
     <Page title="Torneos" actions={newButton}>
+      <InstallCard compact={tournaments.data.length > 0} />
       {tournaments.data.length === 0 && (
         <EmptyState title="Todavía no hay torneos">
           <p className="text-lg text-neutral-700 dark:text-neutral-300">

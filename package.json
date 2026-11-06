@@ -16,7 +16,8 @@
     "test:watch": "vitest",
     "e2e": "playwright test",
     "verify": "npm run typecheck && npm run lint && npm run test && npm run build",
-    "verify:full": "npm run verify && npm run e2e"
+    "verify:full": "npm run verify && npm run e2e",
+    "check:pwa": "node scripts/check-pwa.mjs"
   },
   "dependencies": {
     "dexie": "^4.4.7",

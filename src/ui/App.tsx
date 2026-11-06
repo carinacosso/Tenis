@@ -1,3 +1,4 @@
+import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { BottomNav } from './components/Layout';
 import { UpdatePrompt } from './components/UpdatePrompt';
@@ -7,12 +8,31 @@ import { PlayerDetailPage } from './pages/PlayerDetailPage';
 import { PlayerFormPage } from './pages/PlayerFormPage';
 import { PlayersPage } from './pages/PlayersPage';
 import { SettingsPage } from './pages/SettingsPage';
-import { MatchResultPage } from './pages/MatchResultPage';
-import { RegisterPage } from './pages/RegisterPage';
-import { SeedsPage } from './pages/SeedsPage';
-import { TournamentFormPage } from './pages/TournamentFormPage';
-import { TournamentPage } from './pages/TournamentPage';
 import { TournamentsPage } from './pages/TournamentsPage';
+
+// Las pantallas de torneo se cargan aparte para que la app abra más rápido.
+// Igual quedan guardadas para usarse sin internet (el service worker las precarga).
+const TournamentPage = lazy(() =>
+  import('./pages/TournamentPage').then((m) => ({ default: m.TournamentPage })),
+);
+const TournamentFormPage = lazy(() =>
+  import('./pages/TournamentFormPage').then((m) => ({ default: m.TournamentFormPage })),
+);
+const MatchResultPage = lazy(() =>
+  import('./pages/MatchResultPage').then((m) => ({ default: m.MatchResultPage })),
+);
+const RegisterPage = lazy(() =>
+  import('./pages/RegisterPage').then((m) => ({ default: m.RegisterPage })),
+);
+const SeedsPage = lazy(() => import('./pages/SeedsPage').then((m) => ({ default: m.SeedsPage })));
+
+function Loading() {
+  return (
+    <p aria-busy="true" className="p-6 text-lg">
+      Cargando…
+    </p>
+  );
+}
 
 export function App() {
   const settings = useSettings();
@@ -20,21 +40,23 @@ export function App() {
 
   return (
     <>
-      <Routes>
-        <Route path="/" element={<TournamentsPage />} />
-        <Route path="/torneos/nuevo" element={<TournamentFormPage />} />
-        <Route path="/torneos/:id" element={<TournamentPage />} />
-        <Route path="/torneos/:id/editar" element={<TournamentFormPage />} />
-        <Route path="/torneos/:id/inscribir" element={<RegisterPage />} />
-        <Route path="/torneos/:id/cabezas" element={<SeedsPage />} />
-        <Route path="/torneos/:id/partidos/:matchId" element={<MatchResultPage />} />
-        <Route path="/jugadores" element={<PlayersPage />} />
-        <Route path="/jugadores/nuevo" element={<PlayerFormPage />} />
-        <Route path="/jugadores/:id" element={<PlayerDetailPage />} />
-        <Route path="/jugadores/:id/editar" element={<PlayerFormPage />} />
-        <Route path="/ajustes" element={<SettingsPage />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <Suspense fallback={<Loading />}>
+        <Routes>
+          <Route path="/" element={<TournamentsPage />} />
+          <Route path="/torneos/nuevo" element={<TournamentFormPage />} />
+          <Route path="/torneos/:id" element={<TournamentPage />} />
+          <Route path="/torneos/:id/editar" element={<TournamentFormPage />} />
+          <Route path="/torneos/:id/inscribir" element={<RegisterPage />} />
+          <Route path="/torneos/:id/cabezas" element={<SeedsPage />} />
+          <Route path="/torneos/:id/partidos/:matchId" element={<MatchResultPage />} />
+          <Route path="/jugadores" element={<PlayersPage />} />
+          <Route path="/jugadores/nuevo" element={<PlayerFormPage />} />
+          <Route path="/jugadores/:id" element={<PlayerDetailPage />} />
+          <Route path="/jugadores/:id/editar" element={<PlayerFormPage />} />
+          <Route path="/ajustes" element={<SettingsPage />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </Suspense>
       <BottomNav />
       <UpdatePrompt />
     </>
