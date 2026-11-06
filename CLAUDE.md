@@ -11,7 +11,7 @@
 | 3. Rotativos (Americano dobles/singles/mixto, Mexicano)                        | ✅ Hecha  |
 | 4. Grupos + playoffs, liga, desempates                                         | ✅ Hecha  |
 | 5. W.O./abandonos, consolación (canchas y horarios: descartado por el usuario) | ✅ Hecha  |
-| 6. Compartir imagen, PDF, Excel, backup, historial, estadísticas               | Pendiente |
+| 6. Compartir imagen, PDF, Excel, backup, historial, estadísticas               | Parcial   |
 | 7. Instalación guiada, pulido, Lighthouse                                      | Pendiente |
 
 ## Forma de trabajo (de la especificación)
@@ -63,6 +63,8 @@ Archivos de dominio: `player.ts`, `settings.ts`, `tournament.ts`, `registration.
 Fase 4: `FormatConfig` suma `groups` (`groupCount`, `qualifiersPerGroup`) y `league` (`doubleRound`); `Tournament.tiebreakOrder` (opcional, por defecto ganados → sets → games → directo); `Match.stage` (`group` | `playoff`) y `Match.groupId`; entidad `Group` (Dexie versión 4, tabla `groups`; la liga es un único grupo "Liga"). Dominio: `standings.ts` (tablas por sets con desempate configurable y mini tabla para el directo) y `groups.ts` (reparto en zigzag, fixture con el círculo, tablas por grupo y armado del cuadro final).
 
 Fase 5: `MatchResult.outcome` (`normal` | `walkover` | `retired` | `injury`; a puntos solo `normal` | `walkover`); `SetsResult.autoWalkoverFrom` marca los W.O. puestos por una lesión; formato `knockout` con `consolation?: boolean`; `Match.stage` suma `consolation`. Dominio: `scoring.ts` (`walkoverSets`, `buildWalkover`, `checkRetiredSets`, `effectiveSets`) y `consolation.ts` (quiénes entran y sorteo). Sin cambios de esquema Dexie.
+
+Fase 6 (parcial, a pedido del usuario: solo almacenamiento persistente, historial y estadísticas): `domain/playerHistory.ts` calcula, para un jugador, sus torneos (puesto en cada uno según el formato) y estadísticas; `PlayerService.history`. `app/storageService.ts` envuelve `navigator.storage` (inyectado en `AppDeps.storage`); se pide al iniciar (`main.tsx`) y el estado se ve en Ajustes. Pendiente de la fase 6: compartir imagen, PDF, Excel, backup JSON y recordatorio.
 
 Algoritmo de rotación (`rotation.ts`): descansa primero quien menos descansó; en dobles con N múltiplo de 4 se alterna el método del círculo (compañeros sin repetir garantizado) con búsqueda local, y en el resto se usa búsqueda local con costo = 10·(compañeros repetidos)² + (rivales repetidos)². Se generan varias planificaciones completas y se elige la de menor costo. Singles usa el círculo (cada rival una vez). Mixto: parejas hombre+mujer, rotación de compañeras como punto de partida.
 
@@ -131,6 +133,12 @@ Decisiones de la fase 5:
 - Abandono y lesión: se guardan los sets jugados (el último puede quedar a medias). En las tablas se completa el partido a favor del rival (6-3 2-1 abandona → 6-3 6-1).
 - Lesión en grupos o liga: el lesionado pierde por W.O. los partidos de esa fase que le quedaban (automático). Si después se corrige ese resultado, se sacan esos W.O. automáticos.
 - Consolación (opcional en eliminación directa): entran los que pierden su primer partido jugado (incluye a quien tuvo bye y perdió en 2.ª ronda). No entran los que lo perdieron por W.O. o lesión. Se sortea sola cuando todos jugaron su primer partido; si una corrección cambia quiénes entran, se vuelve a sortear (con confirmación si ya tenía resultados). El torneo termina cuando se juegan la final principal y la de consolación.
+
+Decisiones de la fase 6 (parcial):
+
+- Estadísticas del jugador: solo inscripciones confirmadas en torneos con cruces generados. Los W.O. no cuentan como partido jugado; los abandonos sí (ganado o perdido) y suman solo los sets terminados y los games jugados.
+- Títulos: campeón en cuadros, 1.º en ligas y rotativos terminados. Podios: campeón, subcampeón y semifinalistas en cuadros; top 3 en tablas terminadas.
+- Almacenamiento persistente: se pide al abrir la app; si ya estaba concedido no se vuelve a pedir. En Ajustes se muestra el estado y, si no está protegido, un botón para volver a pedirlo.
 
 ## Convenciones
 

@@ -254,7 +254,7 @@ export function buildWalkover(
 }
 
 /** Un set que todavía se puede seguir jugando (sin ganador definido). */
-function isOpenSet(config: SetsScoring, set: SetScore, index: number): boolean {
+export function isOpenSet(config: SetsScoring, set: SetScore, index: number): boolean {
   const { a, b } = set;
   if (!isCount(a) || !isCount(b) || set.tiebreak) return false;
   if (isSuperTiebreakSet(config, index)) {

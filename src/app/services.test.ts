@@ -112,3 +112,54 @@ describe('servicios', () => {
     });
   });
 });
+
+describe('PlayerService.history', () => {
+  it('junta los torneos del jugador desde los repositorios', async () => {
+    const repos = createMemoryRepositories();
+    let n = 0;
+    const services = createServices(repos, {
+      now: () => new Date('2026-05-01T10:00:00.000Z'),
+      newId: () => `id-${++n}`,
+      random: () => 0.3,
+    });
+    for (const id of ['a', 'b']) {
+      await services.players.create({ ...draft, firstName: id, phone: '' });
+    }
+    const t = await services.tournaments.create({
+      name: 'Copa',
+      date: '2026-05-02',
+      venue: '',
+      category: '4ta',
+      modality: 'singles',
+      format: { kind: 'knockout' },
+      scoring: {
+        kind: 'sets',
+        gamesPerSet: 6,
+        bestOf: 1,
+        tiebreak: { enabled: true, points: 7 },
+        decidingSet: 'full',
+        goldenPoint: false,
+      },
+      maxEntries: 8,
+      entryFee: 0,
+    });
+    if (!t.ok) throw new Error();
+    await services.tournaments.register(t.value.id, ['id-1']);
+    await services.tournaments.register(t.value.id, ['id-2']);
+    await services.tournaments.generateDraw(t.value.id);
+    const [final] = await repos.matches.listByTournament(t.value.id);
+    if (!final) throw new Error();
+    await services.tournaments.recordResult(final.id, {
+      kind: 'sets',
+      outcome: 'normal',
+      sets: [{ a: 6, b: 1 }],
+      winner: 'A',
+    });
+    const one = await services.players.history('id-1');
+    const two = await services.players.history('id-2');
+    const placements = [one.records[0]?.placement, two.records[0]?.placement].sort();
+    expect(placements).toEqual(['Campeón', 'Subcampeón']);
+    expect(one.stats.played + two.stats.played).toBe(2);
+    expect(await services.storage.status()).toBe('unsupported');
+  });
+});

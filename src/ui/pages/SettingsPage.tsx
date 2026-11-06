@@ -1,6 +1,7 @@
 import { type FormEvent, useState } from 'react';
 import type { ThemePreference } from '../../domain/settings';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { StorageCard } from '../components/StorageCard';
 import { ArrowDownIcon, ArrowUpIcon, TrashIcon } from '../components/Icons';
 import { Page } from '../components/Layout';
 import { Button, Card, ChoiceGroup, IconButton, TextField } from '../components/ui';
@@ -104,6 +105,8 @@ export function SettingsPage() {
           </Button>
         </form>
       </Card>
+
+      <StorageCard />
 
       <Card>
         <h2 className="text-xl font-bold">Acerca de</h2>

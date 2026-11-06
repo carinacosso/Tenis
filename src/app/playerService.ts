@@ -6,6 +6,7 @@ import {
   findPossibleDuplicates,
   validatePlayerDraft,
 } from '../domain/player';
+import { playerHistory } from '../domain/playerHistory';
 import type { ErrorListener, Listener, Repositories, Unsubscribe } from '../data/ports';
 import type { AppDeps } from './deps';
 
@@ -22,6 +23,29 @@ export class PlayerService {
   /** Incluye jugadores borrados, para mostrar nombres en torneos donde participaron. */
   observeAll(listener: Listener<Player[]>, onError?: ErrorListener): Unsubscribe {
     return this.repos.players.observeAll(listener, onError);
+  }
+
+  /** Historial de torneos y estadísticas del jugador. */
+  async history(playerId: Id): Promise<ReturnType<typeof playerHistory>> {
+    const [tournaments, entries, matches, rounds, groups] = await Promise.all([
+      this.repos.tournaments.listAll(),
+      this.repos.entries.listAll(),
+      this.repos.matches.listAll(),
+      this.repos.rounds.listAll(),
+      this.repos.groups.listAll(),
+    ]);
+    const byTournament = <T extends { tournamentId: Id }>(rows: readonly T[], id: Id) =>
+      rows.filter((r) => r.tournamentId === id);
+    return playerHistory(
+      playerId,
+      tournaments.map((tournament) => ({
+        tournament,
+        entries: byTournament(entries, tournament.id),
+        matches: byTournament(matches, tournament.id),
+        rounds: byTournament(rounds, tournament.id),
+        groups: byTournament(groups, tournament.id),
+      })),
+    );
   }
 
   get(id: Id): Promise<Player | undefined> {

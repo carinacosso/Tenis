@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { type Player, fullName } from '../../domain/player';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { PlayerHistory } from '../components/PlayerHistory';
 import { PhoneIcon, TrashIcon } from '../components/Icons';
 import { Page } from '../components/Layout';
 import { Button, Card } from '../components/ui';
@@ -93,14 +94,7 @@ export function PlayerDetailPage() {
         Editar
       </Link>
 
-      <section aria-labelledby="historial" className="flex flex-col gap-2">
-        <h2 id="historial" className="text-xl font-bold">
-          Torneos jugados
-        </h2>
-        <p className="text-neutral-700 dark:text-neutral-300">
-          Todavía no jugó torneos. Acá vas a ver su historial y sus estadísticas.
-        </p>
-      </section>
+      <PlayerHistory playerId={player.id} />
 
       <Button variant="danger" className="mt-4" onClick={() => setConfirmDelete(true)}>
         <TrashIcon /> Eliminar jugador

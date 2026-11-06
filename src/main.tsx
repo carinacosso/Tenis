@@ -11,6 +11,9 @@ import './index.css';
 // Composición: el único lugar donde se elige la implementación de persistencia.
 const services = createServices(createDexieRepositories(), browserDeps);
 
+// Pide al navegador que no borre los datos por su cuenta (falta de espacio, poco uso).
+void services.storage.request();
+
 const root = document.getElementById('root');
 if (!root) throw new Error('No se encontró #root');
 
