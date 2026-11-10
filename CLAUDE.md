@@ -153,6 +153,7 @@ Robustez (después de la fase 7, por un problema reportado en el celular sin con
 - `Loading` reemplaza todos los "Cargando…": si tarda más de 8 s ofrece reabrir la app en vez de quedarse colgado.
 - Sin internet desde la primera apertura: `workbox.clientsClaim: true` (el service worker controla la página apenas se instala, sin recargar) y `App` precarga en segundo plano todas las pantallas lazy. Antes, recién instalada y sin conexión, las pantallas de torneo no cargaban.
 - `PageErrorBoundary`: si una pantalla falla al mostrarse o no se pudo cargar su código, muestra un mensaje con "Reabrir la app" en lugar de la pantalla en blanco.
+- Ajustes muestra la versión con la fecha y hora en que se armó (`__BUILD_TIME__` en `vite.config.ts`), para saber si el teléfono ya tiene la última. Al cerrar la app del todo, la versión nueva se instala sola sin mostrar el aviso "Actualizar".
 - iPhone: al volver de segundo plano la conexión con IndexedDB puede quedar colgada sin error. `Repositories.ping()` + `HealthService` comprueban que la base responda; `main.tsx` lo hace en cada `visibilitychange` a visible y, si no responde en 2,5 s, recarga la app.
 
 ## Convenciones

@@ -43,3 +43,22 @@ export function todayIso(now = new Date()): string {
   const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
   return local.toISOString().slice(0, 10);
 }
+
+/** "2026-11-10T16:05:00Z" → "del 10/11/2026 a las 13:05" (hora del teléfono). */
+export function formatBuildTime(iso: string, timeZone?: string): string {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const day = date.toLocaleDateString('es-AR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    timeZone,
+  });
+  const time = date.toLocaleTimeString('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone,
+  });
+  return `del ${day} a las ${time}`;
+}
