@@ -9,6 +9,7 @@ import { Button, Card, ChoiceGroup, IconButton, TextField } from '../components/
 import { useSettings } from '../hooks/useData';
 import { useServices } from '../ServicesContext';
 import { Loading } from '../components/Loading';
+import { formatBuildTime } from '../format';
 
 const THEME_OPTIONS = [
   { value: 'system', label: 'Automático' },
@@ -115,7 +116,10 @@ export function SettingsPage() {
       <Card>
         <h2 className="text-xl font-bold">Acerca de</h2>
         <p className="mt-1 text-neutral-700 dark:text-neutral-300">
-          Versión {__APP_VERSION__}. Tus datos se guardan solo en este dispositivo.
+          <span data-testid="version">
+            Versión {__APP_VERSION__} · {formatBuildTime(__BUILD_TIME__)}
+          </span>
+          . Tus datos se guardan solo en este dispositivo.
         </p>
       </Card>
 
