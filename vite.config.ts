@@ -34,6 +34,9 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
         navigateFallback: '/index.html',
+        // Al instalarse por primera vez, el service worker toma el control de la página abierta
+        // enseguida: así la app funciona sin internet sin tener que cerrarla y volver a abrirla.
+        clientsClaim: true,
       },
     }),
   ],

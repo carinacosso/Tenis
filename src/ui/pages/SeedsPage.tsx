@@ -6,6 +6,7 @@ import { Button } from '../components/ui';
 import { entryName } from '../format';
 import { useTournament } from '../hooks/useTournament';
 import { useServices } from '../ServicesContext';
+import { Loading } from '../components/Loading';
 
 /** Elegir cabezas de serie tocando en orden: el primero que se toca es el 1. */
 export function SeedsPage() {
@@ -20,7 +21,7 @@ export function SeedsPage() {
   if (state.status !== 'ready') {
     return (
       <Page title="Cabezas de serie" back={back}>
-        <p aria-busy="true">Cargando…</p>
+        <Loading />
       </Page>
     );
   }

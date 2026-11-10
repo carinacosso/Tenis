@@ -88,3 +88,69 @@ test.describe('sin internet', () => {
     await context.setOffline(false);
   });
 });
+
+test.describe('sin internet desde la primera apertura', () => {
+  test.use({ serviceWorkers: 'allow' });
+
+  test('sin cerrar la app: se corta internet y se puede crear un torneo y generar cruces', async ({
+    page,
+    context,
+  }) => {
+    await page.goto('/');
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+    });
+    // El service worker toma el control sin recargar
+    await expect
+      .poll(() => page.evaluate(() => navigator.serviceWorker.controller !== null))
+      .toBe(true);
+    await context.setOffline(true);
+
+    for (const [first, last] of [
+      ['Ana', 'Uno'],
+      ['Bruno', 'Dos'],
+    ] as const) {
+      await page.getByRole('link', { name: 'Jugadores' }).click();
+      await page.getByRole('link', { name: /Nuevo/ }).click();
+      await page.getByLabel('Nombre', { exact: true }).fill(first);
+      await page.getByLabel('Apellido').fill(last);
+      await page.getByRole('button', { name: '4ta', exact: true }).click();
+      await page.getByRole('button', { name: 'Guardar jugador' }).click();
+      await expect(page.getByRole('heading', { level: 1, name: `${first} ${last}` })).toBeVisible();
+    }
+    await page.getByRole('link', { name: 'Torneos' }).click();
+    await page.getByRole('link', { name: 'Nuevo' }).click();
+    await page.getByLabel('Nombre del torneo').fill('Sin señal');
+    await page.getByLabel('Categoría').fill('4ta');
+    await page.getByRole('button', { name: 'Crear torneo' }).click();
+    await page.getByRole('link', { name: 'Inscribir' }).click();
+    for (const name of ['Ana Uno', 'Bruno Dos']) {
+      await page
+        .getByRole('list', { name: 'Jugadores disponibles' })
+        .getByRole('button', { name: new RegExp(name) })
+        .click();
+    }
+    await page.getByRole('button', { name: 'Volver' }).click();
+    await page.getByRole('button', { name: 'Generar cruces' }).click();
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Generar cruces' }).click();
+    await expect(page.getByRole('heading', { name: 'Para jugar (1)' })).toBeVisible();
+    await page.getByRole('link', { name: 'Jugadores' }).click();
+    await expect(page.getByRole('list', { name: 'Lista de jugadores' })).toBeVisible();
+    await context.setOffline(false);
+  });
+});
+
+test('si una pantalla no se puede cargar, muestra un mensaje en vez de quedar en blanco', async ({
+  page,
+}) => {
+  await page.route('**/assets/TournamentFormPage-*.js', (route) =>
+    route.abort('internetdisconnected'),
+  );
+  await page.goto('/');
+  await page.getByRole('link', { name: 'Nuevo' }).click();
+  await expect(page.getByRole('heading', { name: 'No se pudo abrir esta pantalla' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reabrir la app' })).toBeVisible();
+  // Se puede seguir usando el resto de la app
+  await page.getByRole('link', { name: 'Jugadores' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'Jugadores' })).toBeVisible();
+});

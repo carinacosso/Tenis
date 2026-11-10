@@ -15,6 +15,15 @@ const services = createServices(createDexieRepositories(), browserDeps);
 // Guarda el aviso de "se puede instalar" del navegador, que puede llegar antes que React.
 listenForInstall();
 
+// En iPhone, al volver de segundo plano la base de datos puede quedar colgada sin dar error.
+// Si no responde, se reabre la app (los datos ya guardados no se pierden).
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState !== 'visible') return;
+  void services.health.isDatabaseResponsive().then((ok) => {
+    if (!ok) window.location.reload();
+  });
+});
+
 // Pide al navegador que no borre los datos por su cuenta (falta de espacio, poco uso).
 void services.storage.request();
 

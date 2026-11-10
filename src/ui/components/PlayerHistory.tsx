@@ -7,6 +7,7 @@ import { formatDate } from '../format';
 import { useActivePlayers } from '../hooks/useData';
 import { useServices } from '../ServicesContext';
 import { Card } from './ui';
+import { Loading } from './Loading';
 
 type History = { records: PlayerTournamentRecord[]; stats: PlayerStats };
 
@@ -35,7 +36,7 @@ export function PlayerHistory({ playerId }: { playerId: Id }) {
     };
   }, [players, playerId]);
 
-  if (!history) return <p aria-busy="true">Cargando historial…</p>;
+  if (!history) return <Loading label="Cargando historial…" />;
   const { records, stats } = history;
   const nameOf = (id: Id) => {
     const p = all.status === 'ready' ? all.data.find((x) => x.id === id) : undefined;

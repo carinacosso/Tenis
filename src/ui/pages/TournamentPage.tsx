@@ -37,6 +37,7 @@ import { Button, Card, EmptyState } from '../components/ui';
 import { entryName, formatDate, formatMoney } from '../format';
 import { type TournamentData, useTournament } from '../hooks/useTournament';
 import { useServices } from '../ServicesContext';
+import { Loading } from '../components/Loading';
 
 type Tab = 'inscriptos' | 'partidos' | 'cuadro' | 'rondas' | 'ranking' | 'grupos' | 'tabla';
 type Confirm = Omit<ConfirmDialogProps, 'open' | 'onCancel'>;
@@ -49,7 +50,7 @@ export function TournamentPage() {
   if (state.status !== 'ready') {
     return (
       <Page title="Torneo" back="/">
-        {state.status === 'loading' && <p aria-busy="true">Cargando…</p>}
+        {state.status === 'loading' && <Loading />}
         {state.status === 'missing' && <p className="text-lg">No encontramos ese torneo.</p>}
         {state.status === 'error' && <p role="alert">No se pudo cargar el torneo.</p>}
       </Page>

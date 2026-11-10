@@ -159,6 +159,7 @@ export function createMemoryRepositories(): Repositories {
     groups,
     settings,
     transaction: (work) => work(),
+    ping: async () => undefined,
     clearAll: async () => {
       await Promise.all([
         playerTable.delete(all),

@@ -13,6 +13,7 @@ import { Page } from '../components/Layout';
 import { Button, ChoiceGroup, TextField } from '../components/ui';
 import { useSettings } from '../hooks/useData';
 import { useServices } from '../ServicesContext';
+import { Loading } from '../components/Loading';
 
 const SEX_OPTIONS = [
   { value: 'none', label: 'Sin indicar' },
@@ -100,7 +101,7 @@ export function PlayerFormPage() {
   if (!loaded || settings.status !== 'ready') {
     return (
       <Page title={title} back={back}>
-        <p aria-busy="true">Cargando…</p>
+        <Loading />
       </Page>
     );
   }
