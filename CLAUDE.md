@@ -151,6 +151,8 @@ Robustez (después de la fase 7, por un problema reportado en el celular sin con
 
 - Ningún error queda silencioso: `ErrorBanner` muestra cualquier error no manejado con su detalle y un botón "Reabrir la app".
 - `Loading` reemplaza todos los "Cargando…": si tarda más de 8 s ofrece reabrir la app en vez de quedarse colgado.
+- Sin internet desde la primera apertura: `workbox.clientsClaim: true` (el service worker controla la página apenas se instala, sin recargar) y `App` precarga en segundo plano todas las pantallas lazy. Antes, recién instalada y sin conexión, las pantallas de torneo no cargaban.
+- `PageErrorBoundary`: si una pantalla falla al mostrarse o no se pudo cargar su código, muestra un mensaje con "Reabrir la app" en lugar de la pantalla en blanco.
 - iPhone: al volver de segundo plano la conexión con IndexedDB puede quedar colgada sin error. `Repositories.ping()` + `HealthService` comprueban que la base responda; `main.tsx` lo hace en cada `visibilitychange` a visible y, si no responde en 2,5 s, recarga la app.
 
 ## Convenciones
