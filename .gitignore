@@ -1,0 +1,31 @@
+# Dependencias
+node_modules/
+
+# Build
+dist/
+dev-dist/
+*.tsbuildinfo
+
+# Tests
+playwright-report/
+test-results/
+coverage/
+blob-report/
+
+# Entorno y editores
+.env
+.env.*
+!.env.example
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+*.log
+npm-debug.log*
+
+# Vercel
+.vercel
+
+# Claude Code (configuración local)
+.claude/settings.local.json
+.claude/.verify-attempts
