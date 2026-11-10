@@ -112,4 +112,6 @@ export interface Repositories {
   transaction<T>(work: () => Promise<T>): Promise<T>;
   /** Borra todos los datos (usado al restaurar un backup y en tests). */
   clearAll(): Promise<void>;
+  /** Lectura mínima para comprobar que la base responde (en iPhone puede quedar colgada). */
+  ping(): Promise<void>;
 }

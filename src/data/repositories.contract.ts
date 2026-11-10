@@ -192,6 +192,10 @@ export function runRepositoryContract(name: string, create: () => Promise<Reposi
       expect((await repos.matches.listAll()).map((m) => m.id)).toEqual(['m2']);
     });
 
+    it('ping responde', async () => {
+      await expect(repos.ping()).resolves.toBeUndefined();
+    });
+
     it('settings devuelve los valores por defecto si no hay nada guardado', async () => {
       expect(await repos.settings.get()).toEqual(DEFAULT_SETTINGS);
     });

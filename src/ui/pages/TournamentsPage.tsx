@@ -6,6 +6,7 @@ import { EmptyState } from '../components/ui';
 import { InstallCard } from '../install/InstallCard';
 import { formatDate } from '../format';
 import { useActiveTournaments } from '../hooks/useTournament';
+import { Loading } from '../components/Loading';
 
 const STATUS_STYLES: Record<Tournament['status'], string> = {
   registration: 'bg-amber-200 text-amber-950',
@@ -55,7 +56,7 @@ export function TournamentsPage() {
         {tournaments.status === 'error' ? (
           <p role="alert">No se pudieron cargar los torneos.</p>
         ) : (
-          <p aria-busy="true">Cargando…</p>
+          <Loading />
         )}
       </Page>
     );

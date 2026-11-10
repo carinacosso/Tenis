@@ -5,6 +5,7 @@ import { ChevronIcon, PlusIcon, SearchIcon } from '../components/Icons';
 import { Page } from '../components/Layout';
 import { EmptyState } from '../components/ui';
 import { useActivePlayers } from '../hooks/useData';
+import { Loading } from '../components/Loading';
 
 export function PlayersPage() {
   const players = useActivePlayers();
@@ -21,7 +22,7 @@ export function PlayersPage() {
 
   return (
     <Page title="Jugadores" actions={newButton}>
-      {players.status === 'loading' && <p aria-busy="true">Cargando…</p>}
+      {players.status === 'loading' && <Loading />}
       {players.status === 'error' && (
         <p role="alert" className="font-semibold text-red-700 dark:text-red-400">
           No se pudieron cargar los jugadores.

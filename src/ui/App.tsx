@@ -1,6 +1,8 @@
 import { Suspense, lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { BottomNav } from './components/Layout';
+import { ErrorBanner } from './components/ErrorBanner';
+import { Loading } from './components/Loading';
 import { UpdatePrompt } from './components/UpdatePrompt';
 import { useSettings } from './hooks/useData';
 import { useApplyTheme } from './hooks/useTheme';
@@ -26,21 +28,19 @@ const RegisterPage = lazy(() =>
 );
 const SeedsPage = lazy(() => import('./pages/SeedsPage').then((m) => ({ default: m.SeedsPage })));
 
-function Loading() {
-  return (
-    <p aria-busy="true" className="p-6 text-lg">
-      Cargando…
-    </p>
-  );
-}
-
 export function App() {
   const settings = useSettings();
   useApplyTheme(settings.status === 'ready' ? settings.data.theme : undefined);
 
   return (
     <>
-      <Suspense fallback={<Loading />}>
+      <Suspense
+        fallback={
+          <div className="p-6">
+            <Loading />
+          </div>
+        }
+      >
         <Routes>
           <Route path="/" element={<TournamentsPage />} />
           <Route path="/torneos/nuevo" element={<TournamentFormPage />} />
@@ -59,6 +59,7 @@ export function App() {
       </Suspense>
       <BottomNav />
       <UpdatePrompt />
+      <ErrorBanner />
     </>
   );
 }

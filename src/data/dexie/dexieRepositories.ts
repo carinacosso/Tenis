@@ -142,6 +142,9 @@ export function createDexieRepositories(db: TenisDatabase = new TenisDatabase())
     groups,
     settings,
     transaction: (work) => db.transaction('rw', db.tables, work),
+    ping: async () => {
+      await db.settings.get(SETTINGS_KEY);
+    },
     clearAll: async () => {
       await db.transaction('rw', db.tables, async () => {
         await Promise.all(db.tables.map((table) => table.clear()));

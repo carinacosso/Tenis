@@ -8,6 +8,7 @@ import { Page } from '../components/Layout';
 import { Button, Card, ChoiceGroup, IconButton, TextField } from '../components/ui';
 import { useSettings } from '../hooks/useData';
 import { useServices } from '../ServicesContext';
+import { Loading } from '../components/Loading';
 
 const THEME_OPTIONS = [
   { value: 'system', label: 'Automático' },
@@ -25,7 +26,7 @@ export function SettingsPage() {
   if (settings.status !== 'ready') {
     return (
       <Page title="Ajustes">
-        <p aria-busy="true">Cargando…</p>
+        <Loading />
       </Page>
     );
   }

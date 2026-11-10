@@ -11,6 +11,7 @@ import { Button, EmptyState } from '../components/ui';
 import { entryName } from '../format';
 import { useTournament } from '../hooks/useTournament';
 import { useServices } from '../ServicesContext';
+import { Loading } from '../components/Loading';
 
 /** Inscripción rápida: en singles un toque inscribe; en dobles se eligen los dos de la pareja. */
 export function RegisterPage() {
@@ -26,9 +27,7 @@ export function RegisterPage() {
   if (state.status !== 'ready') {
     return (
       <Page title="Inscribir" back={back}>
-        <p aria-busy="true">
-          {state.status === 'loading' ? 'Cargando…' : 'No encontramos el torneo.'}
-        </p>
+        {state.status === 'loading' ? <Loading /> : <p>No encontramos el torneo.</p>}
       </Page>
     );
   }

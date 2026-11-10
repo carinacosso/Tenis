@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { PersistenceState } from '../../app/storageService';
 import { useServices } from '../ServicesContext';
 import { Button, Card } from './ui';
+import { Loading } from './Loading';
 
 const TEXTS: Record<PersistenceState, { title: string; body: string }> = {
   persisted: {
@@ -37,7 +38,7 @@ export function StorageCard() {
     <Card className="flex flex-col gap-2">
       <h2 className="text-xl font-bold">Almacenamiento</h2>
       {state === null ? (
-        <p aria-busy="true">Revisando…</p>
+        <Loading label="Revisando…" />
       ) : (
         <>
           <p

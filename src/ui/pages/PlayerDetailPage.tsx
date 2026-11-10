@@ -7,6 +7,7 @@ import { PhoneIcon, TrashIcon } from '../components/Icons';
 import { Page } from '../components/Layout';
 import { Button, Card } from '../components/ui';
 import { useServices } from '../ServicesContext';
+import { Loading } from '../components/Loading';
 
 type LoadState =
   { status: 'loading' } | { status: 'missing' } | { status: 'ready'; player: Player };
@@ -34,7 +35,7 @@ export function PlayerDetailPage() {
   if (state.status === 'loading') {
     return (
       <Page title="Jugador" back="/jugadores">
-        <p aria-busy="true">Cargando…</p>
+        <Loading />
       </Page>
     );
   }

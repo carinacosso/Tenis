@@ -30,6 +30,7 @@ import { Button, Card, ChoiceGroup, IconButton, TextField } from '../components/
 import { todayIso } from '../format';
 import { useSettings } from '../hooks/useData';
 import { useServices } from '../ServicesContext';
+import { Loading } from '../components/Loading';
 
 function emptyDraft(): TournamentDraft {
   return {
@@ -190,7 +191,7 @@ export function TournamentFormPage() {
   if (!loaded) {
     return (
       <Page title={title} back={back}>
-        <p aria-busy="true">Cargando…</p>
+        <Loading />
       </Page>
     );
   }

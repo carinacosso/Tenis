@@ -24,6 +24,7 @@ import { matchTitle } from '../matchTitle';
 import { useTournament } from '../hooks/useTournament';
 import { useServices } from '../ServicesContext';
 import { ScoreResultForm } from './ScoreResultForm';
+import { Loading } from '../components/Loading';
 
 interface SetInput {
   winner: Side | null;
@@ -92,7 +93,7 @@ export function MatchResultPage() {
   if (state.status !== 'ready' || !resolved) {
     return (
       <Page title="Resultado" back={back}>
-        <p aria-busy="true">Cargando…</p>
+        <Loading />
       </Page>
     );
   }
