@@ -78,6 +78,6 @@ test('Ajustes muestra si los datos están protegidos', async ({ page }) => {
 test('Ajustes muestra la versión con su fecha', async ({ page }) => {
   await page.goto('/ajustes');
   await expect(page.getByTestId('version')).toHaveText(
-    /^Versión 0\.2\.0 · del \d{2}\/\d{2}\/\d{4} a las \d{2}:\d{2}$/,
+    /^Versión 0\.3\.0 · del \d{2}\/\d{2}\/\d{4} a las \d{2}:\d{2}$/,
   );
 });

@@ -17,8 +17,15 @@ export interface SetsScoring {
 
 export interface PointsScoring {
   kind: 'points';
-  /** Gana el primero que llega a esta cantidad de puntos. */
+  /** Gana el primero que llega a esta cantidad de puntos (o games). */
   target: number;
+  /** Qué se cuenta: puntos (por defecto) o games. Solo cambia cómo se muestra. */
+  unit?: 'points' | 'games';
+}
+
+/** "puntos" o "games", según la puntuación del torneo. */
+export function scoreUnitWord(config: Pick<PointsScoring, 'unit'>): string {
+  return config.unit === 'games' ? 'games' : 'puntos';
 }
 
 export interface TimeScoring {
@@ -31,6 +38,7 @@ export type ScoringConfig = SetsScoring | PointsScoring | TimeScoring;
 export const SUPER_TIEBREAK_POINTS = 10;
 
 export const POINT_TARGETS = [16, 21, 24, 32] as const;
+export const GAME_TARGETS = [3, 4] as const;
 
 export const DEFAULT_POINTS_SCORING: PointsScoring = { kind: 'points', target: 21 };
 
@@ -186,7 +194,10 @@ export function checkPointsResult(config: PointsScoring, a: number, b: number): 
   const w = Math.max(a, b);
   const l = Math.min(a, b);
   if (w !== config.target || l >= config.target) {
-    return { ok: false, error: `Gana el primero que llega a ${config.target} puntos.` };
+    return {
+      ok: false,
+      error: `Gana el primero que llega a ${config.target} ${scoreUnitWord(config)}.`,
+    };
   }
   return { ok: true, winner: a > b ? 'A' : 'B' };
 }
@@ -446,9 +457,11 @@ export function checkScoringConfig(config: ScoringConfig): string | null {
         return 'El tie-break debe ser a entre 5 y 15 puntos.';
       return null;
     case 'points':
+      if (config.unit !== undefined && config.unit !== 'points' && config.unit !== 'games')
+        return 'La unidad tiene que ser puntos o games.';
       return Number.isInteger(config.target) && config.target >= 1 && config.target <= 99
         ? null
-        : 'Los puntos deben ser entre 1 y 99.';
+        : `Los ${scoreUnitWord(config)} deben ser entre 1 y 99.`;
     case 'time':
       return Number.isInteger(config.minutes) && config.minutes >= 1 && config.minutes <= 240
         ? null
@@ -458,7 +471,7 @@ export function checkScoringConfig(config: ScoringConfig): string | null {
 
 /** Describe la configuración en una línea: "2 de 3 sets a 6 · tie-break a 7 · super tie-break". */
 export function describeScoring(config: ScoringConfig): string {
-  if (config.kind === 'points') return `Partidos a ${config.target} puntos`;
+  if (config.kind === 'points') return `Partidos a ${config.target} ${scoreUnitWord(config)}`;
   if (config.kind === 'time') return `Por tiempo: ${config.minutes} minutos`;
   const sets =
     config.bestOf === 1

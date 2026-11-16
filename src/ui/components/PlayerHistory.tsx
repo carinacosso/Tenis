@@ -73,8 +73,8 @@ export function PlayerHistory({ playerId }: { playerId: Id }) {
             )}
             {(stats.pointsFor > 0 || stats.pointsAgainst > 0) && (
               <p className="text-neutral-700 dark:text-neutral-300">
-                Puntos (Americano/Mexicano): {stats.pointsFor} a favor, {stats.pointsAgainst} en
-                contra
+                Puntos o games (Americano/Mexicano): {stats.pointsFor} a favor,{' '}
+                {stats.pointsAgainst} en contra
               </p>
             )}
             <p className="text-sm text-neutral-600 dark:text-neutral-400">

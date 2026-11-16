@@ -117,3 +117,44 @@ test('Mexicano: primera ronda por nivel y siguientes según el ranking', async (
   await playVisibleRound(page, [3]);
   await expect(page.getByTestId('campeon')).toBeVisible();
 });
+
+test('Americano dobles a 4 games: se carga 4-2 y el ranking cuenta games', async ({ page }) => {
+  for (const [i, [firstName, lastName, level]] of NAMES.slice(0, 4).entries()) {
+    await createPlayer(page, { firstName, lastName, phone: `11 5100 000${i}`, level });
+  }
+  await page.goto('/torneos/nuevo');
+  await page.getByLabel('Nombre del torneo').fill('Games');
+  await page.getByLabel('Categoría').fill('Libre');
+  await page.getByRole('button', { name: 'Americano dobles', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'A 3 games', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'A 4 games', exact: true }).click();
+  await page.getByLabel('Cantidad de rondas').fill('1');
+  await page.getByRole('button', { name: 'Crear torneo' }).click();
+  await expect(page.getByText('Partidos a 4 games')).toBeVisible();
+
+  await page.getByRole('link', { name: 'Inscribir' }).click();
+  for (const [firstName, lastName] of NAMES.slice(0, 4)) {
+    await page
+      .getByRole('list', { name: 'Jugadores disponibles' })
+      .getByRole('button', { name: new RegExp(`${firstName} ${lastName}`) })
+      .click();
+  }
+  await page.getByRole('button', { name: 'Volver' }).click();
+  await page.getByRole('button', { name: 'Generar cruces' }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Generar cruces' }).click();
+
+  await page.getByRole('link', { name: /Cargar resultado/ }).click();
+  const region = page.getByRole('region', { name: 'Resultado' });
+  await expect(region).toContainText('¿Quién llegó a 4 games?');
+  await region.getByRole('button').first().click();
+  await expect(region.getByRole('button', { name: '4', exact: true })).toHaveCount(0);
+  await region.getByRole('button', { name: '2', exact: true }).click();
+  await page.getByRole('button', { name: 'Guardar resultado' }).click();
+
+  await expect(page.getByTestId('campeon')).toBeVisible();
+  await page.getByRole('tab', { name: 'Ranking' }).click();
+  const table = page.getByRole('table', { name: 'Ranking' });
+  await expect(table.getByRole('columnheader', { name: 'Games' })).toBeVisible();
+  await expect(table.getByRole('row').nth(1)).toContainText('4');
+  await expect(page.getByText('Orden: games, partidos ganados')).toBeVisible();
+});
