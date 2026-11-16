@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_SETS_SCORING,
+  scoreUnitWord,
   buildWalkover,
   checkRetiredSets,
   effectiveSets,
@@ -469,5 +470,30 @@ describe('W.O., abandono y lesión', () => {
       winner: 'A' as const,
     };
     expect(effectiveSets(sixWithTb, normal)).toEqual([{ a: 6, b: 1 }]);
+  });
+});
+
+describe('partidos a games (rotativos)', () => {
+  const games = { kind: 'points' as const, target: 4, unit: 'games' as const };
+
+  it('gana el primero que llega a 3 o 4 games', () => {
+    expect(checkPointsResult(games, 4, 3)).toEqual({ ok: true, winner: 'A' });
+    expect(checkPointsResult(games, 0, 4)).toEqual({ ok: true, winner: 'B' });
+    expect(checkPointsResult(games, 5, 3)).toEqual({
+      ok: false,
+      error: 'Gana el primero que llega a 4 games.',
+    });
+    expect(checkPointsResult({ ...games, target: 3 }, 3, 2).ok).toBe(true);
+  });
+
+  it('describe, valida y arma W.O. con games', () => {
+    expect(describeScoring(games)).toBe('Partidos a 4 games');
+    expect(describeScoring({ kind: 'points', target: 21 })).toBe('Partidos a 21 puntos');
+    expect(checkScoringConfig(games)).toBeNull();
+    expect(checkScoringConfig({ ...games, target: 0 })).toBe('Los games deben ser entre 1 y 99.');
+    expect(scoreUnitWord(games)).toBe('games');
+    expect(scoreUnitWord({})).toBe('puntos');
+    const wo = buildWalkover(games, 'B');
+    expect(wo.ok && wo.result).toMatchObject({ a: 0, b: 4, outcome: 'walkover' });
   });
 });

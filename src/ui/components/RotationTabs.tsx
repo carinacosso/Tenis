@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import type { Id } from '../../domain/common';
 import { type Match, sideEntries } from '../../domain/match';
 import { isRoundComplete, lastRoundNumber, nextRoundBlocker } from '../../domain/rotationStandings';
-import { pointsOf } from '../../domain/scoring';
+import { pointsOf, scoreUnitWord } from '../../domain/scoring';
 import { entryName } from '../format';
 import { useRanking } from '../hooks/useRanking';
 import type { TournamentData } from '../hooks/useTournament';
@@ -235,6 +235,8 @@ export function RankingTab({ data }: { data: TournamentData }) {
     return <EmptyState title="El ranking aparece cuando arranca el torneo" />;
   }
   const hasRestPoints = ranking.some((r) => r.restPoints > 0);
+  const { scoring } = data.tournament;
+  const unit = scoring.kind === 'points' ? scoreUnitWord(scoring) : 'puntos';
   return (
     <>
       <div className="-mx-4 overflow-x-auto px-4">
@@ -253,11 +255,11 @@ export function RankingTab({ data }: { data: TournamentData }) {
               <th scope="col" className="py-2 pr-2 text-right" title="Partidos ganados">
                 PG
               </th>
-              <th scope="col" className="py-2 pr-2 text-right" title="Diferencia de puntos">
+              <th scope="col" className="py-2 pr-2 text-right" title={`Diferencia de ${unit}`}>
                 Dif
               </th>
               <th scope="col" className="py-2 text-right">
-                Pts
+                {unit === 'games' ? 'Games' : 'Pts'}
               </th>
             </tr>
           </thead>
@@ -281,9 +283,9 @@ export function RankingTab({ data }: { data: TournamentData }) {
         </table>
       </div>
       <p className="text-neutral-700 dark:text-neutral-300">
-        Orden: puntos, partidos ganados, diferencia de puntos y sorteo.
+        Orden: {unit}, partidos ganados, diferencia de {unit} y sorteo.
         {hasRestPoints &&
-          ' * Incluye puntos por descanso (el promedio de puntos de la ronda en que descansó).'}
+          ` * Incluye ${unit} por descanso (el promedio de ${unit} de la ronda en que descansó).`}
       </p>
     </>
   );

@@ -3,6 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import {
   DEFAULT_POINTS_SCORING,
   DEFAULT_SETS_SCORING,
+  GAME_TARGETS,
   POINT_TARGETS,
   type ScoringConfig,
   type SetsScoring,
@@ -67,7 +68,8 @@ const FORMAT_HELP: Record<FormatChoice, string> = {
   knockout: 'Cuadro: el que pierde queda afuera.',
   groups: 'Primero grupos todos contra todos; los mejores de cada grupo pasan a un cuadro final.',
   league: 'Todos contra todos; gana el primero de la tabla.',
-  americano_doubles: 'Parejas que cambian cada ronda; cada uno suma los puntos de su pareja.',
+  americano_doubles:
+    'Parejas que cambian cada ronda; cada uno suma los puntos (o games) de su pareja.',
   americano_singles: 'Todos contra todos, suma de puntos individual.',
   americano_mixed: 'Como el Americano dobles, con parejas siempre hombre + mujer.',
   mexicano: 'Desde la ronda 2 se cruzan según el ranking: 1° y 4° vs 2° y 3°.',
@@ -107,7 +109,11 @@ export function TournamentFormPage() {
       setFeeText(String(t.entryFee));
       if (isRotation(t.format) && t.format.rounds !== null) setRoundsText(String(t.format.rounds));
       const { scoring } = t;
-      if (scoring.kind === 'points' && !POINT_TARGETS.some((p) => p === scoring.target))
+      if (
+        scoring.kind === 'points' &&
+        scoring.unit !== 'games' &&
+        !POINT_TARGETS.some((p) => p === scoring.target)
+      )
         setCustomTarget(String(scoring.target));
       if (t.scoring.kind === 'time') setMinutesText(String(t.scoring.minutes));
       if (t.format.kind === 'groups') setGroupCountText(String(t.format.groupCount));
@@ -149,13 +155,16 @@ export function TournamentFormPage() {
     set('scoring', next);
   };
 
-  // Opción marcada: por tiempo, un objetivo estándar (16, 21…) u "Otro" (customTarget con valor).
+  // Opción marcada: por tiempo, a games ("g3", "g4"), un objetivo estándar (16, 21…)
+  // u "Otro" (customTarget con valor).
   const pointsMode =
     draft.scoring.kind === 'time'
       ? 'time'
-      : customTarget !== '' || draft.scoring.kind !== 'points'
-        ? 'custom'
-        : String(draft.scoring.target);
+      : draft.scoring.kind === 'points' && draft.scoring.unit === 'games'
+        ? `g${draft.scoring.target}`
+        : customTarget !== '' || draft.scoring.kind !== 'points'
+          ? 'custom'
+          : String(draft.scoring.target);
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -388,6 +397,7 @@ export function TournamentFormPage() {
                 <ChoiceGroup
                   label="Cada partido"
                   options={[
+                    ...GAME_TARGETS.map((g) => ({ value: `g${g}`, label: `A ${g} games` })),
                     ...POINT_TARGETS.map((p) => ({ value: String(p), label: `A ${p}` })),
                     { value: 'custom', label: 'Otro' },
                     { value: 'time', label: 'Por tiempo' },
@@ -398,6 +408,9 @@ export function TournamentFormPage() {
                     if (v === 'time') {
                       setCustomTarget('');
                       set('scoring', { kind: 'time', minutes: Number(minutesText) || 15 });
+                    } else if (v.startsWith('g')) {
+                      setCustomTarget('');
+                      set('scoring', { kind: 'points', target: Number(v.slice(1)), unit: 'games' });
                     } else if (v === 'custom') {
                       setCustomTarget(customTarget || '18');
                       set('scoring', { kind: 'points', target: Number(customTarget) || 18 });

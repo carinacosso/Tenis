@@ -2,7 +2,13 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { type Match, sideEntries } from '../../domain/match';
 import { lastRoundNumber } from '../../domain/rotationStandings';
-import { type MatchResult, type Side, buildScoreResult, buildWalkover } from '../../domain/scoring';
+import {
+  type MatchResult,
+  type Side,
+  buildScoreResult,
+  buildWalkover,
+  scoreUnitWord,
+} from '../../domain/scoring';
 import { OutcomeChooser, SideChooser } from '../components/OutcomeInputs';
 import { Page } from '../components/Layout';
 import { Button, Card } from '../components/ui';
@@ -106,6 +112,7 @@ export function ScoreResultForm({
       {config.kind === 'points' && !walkover && (
         <PointsInput
           target={config.target}
+          unit={scoreUnitWord(config)}
           nameA={name('A')}
           nameB={name('B')}
           a={a}
@@ -165,6 +172,7 @@ export function ScoreResultForm({
 /** A puntos fijos: se elige quién ganó y los puntos del que perdió. */
 function PointsInput({
   target,
+  unit,
   nameA,
   nameB,
   a,
@@ -172,6 +180,8 @@ function PointsInput({
   onChange,
 }: {
   target: number;
+  /** "puntos" o "games". */
+  unit: string;
   nameA: string;
   nameB: string;
   a: number | null;
@@ -188,7 +198,9 @@ function PointsInput({
       aria-label="Resultado"
       className="flex flex-col gap-3 rounded-2xl border-2 border-neutral-200 p-4 dark:border-neutral-800"
     >
-      <p className="font-semibold">¿Quién llegó a {target}?</p>
+      <p className="font-semibold">
+        ¿Quién llegó a {target} {unit}?
+      </p>
       <div className="grid grid-cols-2 gap-2">
         {(['A', 'B'] as const).map((side) => (
           <button
@@ -208,7 +220,9 @@ function PointsInput({
       </div>
       {winner && (
         <>
-          <p className="font-semibold">Puntos de {winner === 'A' ? nameB : nameA}</p>
+          <p className="font-semibold">
+            {unit === 'games' ? 'Games' : 'Puntos'} de {winner === 'A' ? nameB : nameA}
+          </p>
           {target <= 40 ? (
             <div className="grid grid-cols-6 gap-2">
               {Array.from({ length: target }, (_, n) => (
@@ -231,7 +245,7 @@ function PointsInput({
             <input
               type="number"
               inputMode="numeric"
-              aria-label="Puntos del que perdió"
+              aria-label={`${unit === 'games' ? 'Games' : 'Puntos'} del que perdió`}
               value={loserPoints ?? ''}
               onChange={(e) =>
                 choose(winner, e.target.value === '' ? null : Number(e.target.value))

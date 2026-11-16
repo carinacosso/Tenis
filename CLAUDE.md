@@ -117,6 +117,7 @@ Otras decisiones de la fase 3:
 - Americano: se generan todas las rondas al sortear. Mexicano: la ronda 1 al sortear, el resto con el botón "Generar ronda N" cuando la anterior está completa; la última ronda se puede "Rearmar" mientras no tenga resultados.
 - Americano mixto: todos los inscriptos necesitan sexo cargado; mínimo 2 hombres y 2 mujeres. Si sobran de un sexo, descansan por turnos.
 - Podio de rotativos: los 3 primeros del ranking.
+- Rotativos a games (pedido del usuario): opciones "A 3 games" y "A 4 games" en todos los rotativos. Gana el primero que llega (4-0 a 4-3, sin tie-break). Se modela como `PointsScoring` con `unit: 'games'`: misma validación y ranking; solo cambia la palabra en la UI (`scoreUnitWord`).
 
 Decisiones de la fase 4:
 
